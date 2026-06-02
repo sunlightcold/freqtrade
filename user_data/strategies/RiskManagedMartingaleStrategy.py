@@ -29,13 +29,13 @@ class RiskManagedMartingaleStrategy(IStrategy):
 
     position_adjustment_enable = True
     max_entry_position_adjustment = 3
-    max_dca_multiplier = 4.45
+    max_dca_multiplier = 5.0
 
     minimal_roi = {
-        "720": 0.01,
-        "240": 0.02,
-        "60": 0.03,
-        "0": 0.05,
+        "720": 0.005,
+        "240": 0.008,
+        "60": 0.012,
+        "0": 0.025,
     }
 
     stoploss = -0.16
@@ -98,11 +98,19 @@ class RiskManagedMartingaleStrategy(IStrategy):
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         dataframe["ema_50"] = ta.EMA(dataframe, timeperiod=50)
+        dataframe["ema_100"] = ta.EMA(dataframe, timeperiod=100)
         dataframe["ema_200"] = ta.EMA(dataframe, timeperiod=200)
         dataframe["rsi"] = ta.RSI(dataframe, timeperiod=14)
+        dataframe["adx"] = ta.ADX(dataframe, timeperiod=14)
+        dataframe["plus_di"] = ta.PLUS_DI(dataframe, timeperiod=14)
+        dataframe["minus_di"] = ta.MINUS_DI(dataframe, timeperiod=14)
         dataframe["atr"] = ta.ATR(dataframe, timeperiod=14)
         dataframe["atr_pct"] = dataframe["atr"] / dataframe["close"]
         dataframe["volume_mean_24"] = dataframe["volume"].rolling(24).mean()
+        dataframe["ema_50_slope"] = dataframe["ema_50"] / dataframe["ema_50"].shift(12) - 1
+        dataframe["ema_200_slope"] = dataframe["ema_200"] / dataframe["ema_200"].shift(24) - 1
+        dataframe["roc_24"] = dataframe["close"] / dataframe["close"].shift(24) - 1
+        dataframe["roc_72"] = dataframe["close"] / dataframe["close"].shift(72) - 1
 
         bollinger = qtpylib.bollinger_bands(qtpylib.typical_price(dataframe), window=20, stds=2)
         dataframe["bb_lowerband"] = bollinger["lower"]
@@ -112,22 +120,58 @@ class RiskManagedMartingaleStrategy(IStrategy):
             (dataframe["bb_upperband"] - dataframe["bb_lowerband"]) / dataframe["bb_middleband"]
         )
 
+        pair = metadata["pair"]
+        high_beta = pair.startswith(("SOL/", "DOGE/", "ADA/", "AVAX/"))
+        atr_ceiling = 0.055 if high_beta else 0.045
+        dataframe["risk_ok"] = (
+            (dataframe["atr_pct"] > 0.006)
+            & (dataframe["atr_pct"] < atr_ceiling)
+            & (dataframe["bb_width"] > 0.018)
+            & (dataframe["volume"] > dataframe["volume_mean_24"] * 0.75)
+        )
+
         dataframe["trend_ok"] = (
-            (dataframe["ema_50"] > dataframe["ema_200"])
-            & (dataframe["close"] > dataframe["ema_200"] * 0.97)
+            (dataframe["ema_50"] > dataframe["ema_100"])
+            & (dataframe["ema_100"] > dataframe["ema_200"])
+            & (dataframe["ema_50_slope"] > 0)
+            & (dataframe["ema_200_slope"] > -0.002)
+            & (dataframe["plus_di"] > dataframe["minus_di"] * 1.05)
+            & (dataframe["adx"] > 16)
+            & (dataframe["roc_24"] > -0.025)
+            & (dataframe["roc_72"] > -0.015)
+            & (dataframe["close"] > dataframe["ema_200"] * 1.005)
         )
         dataframe["short_trend_ok"] = (
-            (dataframe["ema_50"] < dataframe["ema_200"])
-            & (dataframe["close"] < dataframe["ema_200"] * 1.03)
+            (dataframe["ema_50"] < dataframe["ema_100"])
+            & (dataframe["ema_100"] < dataframe["ema_200"])
+            & (dataframe["ema_50_slope"] < 0)
+            & (dataframe["ema_200_slope"] < 0.002)
+            & (dataframe["minus_di"] > dataframe["plus_di"] * 1.05)
+            & (dataframe["adx"] > 16)
+            & (dataframe["roc_24"] < 0.025)
+            & (dataframe["roc_72"] < 0.015)
+            & (dataframe["close"] < dataframe["ema_200"] * 0.995)
         )
 
         dataframe["pullback_ok"] = (
-            (dataframe["close"] < dataframe["bb_lowerband"] * 1.015)
-            | qtpylib.crossed_above(dataframe["rsi"], 32)
+            (
+                (dataframe["close"] < dataframe["ema_50"] * 1.012)
+                & (dataframe["close"] > dataframe["ema_100"] * 0.992)
+            )
+            | (
+                (dataframe["close"] < dataframe["bb_middleband"] * 1.004)
+                & qtpylib.crossed_above(dataframe["rsi"], 44)
+            )
         )
         dataframe["short_rebound_ok"] = (
-            (dataframe["close"] > dataframe["bb_upperband"] * 0.985)
-            | qtpylib.crossed_below(dataframe["rsi"], 68)
+            (
+                (dataframe["close"] > dataframe["ema_50"] * 0.988)
+                & (dataframe["close"] < dataframe["ema_100"] * 1.008)
+            )
+            | (
+                (dataframe["close"] > dataframe["bb_middleband"] * 0.996)
+                & qtpylib.crossed_below(dataframe["rsi"], 56)
+            )
         )
 
         return dataframe
@@ -137,29 +181,25 @@ class RiskManagedMartingaleStrategy(IStrategy):
             (
                 dataframe["trend_ok"]
                 & dataframe["pullback_ok"]
-                & (dataframe["rsi"] > 28)
-                & (dataframe["rsi"] < 46)
-                & (dataframe["bb_width"] > 0.025)
-                & (dataframe["atr_pct"] < 0.08)
+                & dataframe["risk_ok"]
+                & (dataframe["rsi"] > 40)
+                & (dataframe["rsi"] < 61)
                 & (dataframe["volume"] > 0)
-                & (dataframe["volume"] > dataframe["volume_mean_24"] * 0.6)
             ),
             ["enter_long", "enter_tag"],
-        ] = (1, "trend_pullback")
+        ] = (1, "regime_pullback_long")
 
         dataframe.loc[
             (
                 dataframe["short_trend_ok"]
                 & dataframe["short_rebound_ok"]
-                & (dataframe["rsi"] > 54)
-                & (dataframe["rsi"] < 76)
-                & (dataframe["bb_width"] > 0.025)
-                & (dataframe["atr_pct"] < 0.08)
+                & dataframe["risk_ok"]
+                & (dataframe["rsi"] > 39)
+                & (dataframe["rsi"] < 60)
                 & (dataframe["volume"] > 0)
-                & (dataframe["volume"] > dataframe["volume_mean_24"] * 0.6)
             ),
             ["enter_short", "enter_tag"],
-        ] = (1, "short_trend_rebound")
+        ] = (1, "regime_rebound_short")
 
         return dataframe
 
@@ -171,9 +211,9 @@ class RiskManagedMartingaleStrategy(IStrategy):
                     & (dataframe["close"] > dataframe["bb_upperband"])
                 )
                 | (
-                    (dataframe["close"] < dataframe["ema_50"])
-                    & (dataframe["rsi"] < 42)
-                    & (dataframe["ema_50"] < dataframe["ema_200"])
+                    (dataframe["close"] < dataframe["ema_100"] * 0.992)
+                    & (dataframe["rsi"] < 45)
+                    & (dataframe["minus_di"] > dataframe["plus_di"])
                 )
             )
             & (dataframe["volume"] > 0),
@@ -187,9 +227,9 @@ class RiskManagedMartingaleStrategy(IStrategy):
                     & (dataframe["close"] < dataframe["bb_lowerband"])
                 )
                 | (
-                    (dataframe["close"] > dataframe["ema_50"])
-                    & (dataframe["rsi"] > 58)
-                    & (dataframe["ema_50"] > dataframe["ema_200"])
+                    (dataframe["close"] > dataframe["ema_100"] * 1.008)
+                    & (dataframe["rsi"] > 55)
+                    & (dataframe["plus_di"] > dataframe["minus_di"])
                 )
             )
             & (dataframe["volume"] > 0),
@@ -237,8 +277,8 @@ class RiskManagedMartingaleStrategy(IStrategy):
         if count > self.max_entry_position_adjustment:
             return None
 
-        dca_profit_triggers = [-0.025, -0.05, -0.085]
-        dca_multipliers = [1.10, 1.45, 1.90]
+        dca_profit_triggers = [-0.03, -0.065, -0.105]
+        dca_multipliers = [1.00, 1.30, 1.70]
 
         trigger_index = count - 1
         if trigger_index >= len(dca_profit_triggers):
@@ -257,8 +297,8 @@ class RiskManagedMartingaleStrategy(IStrategy):
             trend_broken = (
                 (last_candle["close"] > last_candle["ema_200"] * 1.06)
                 or (
-                    last_candle["ema_50"] > last_candle["ema_200"]
-                    and last_candle["close"] > last_candle["ema_200"]
+                    last_candle["ema_50"] > last_candle["ema_100"]
+                    and last_candle["plus_di"] > last_candle["minus_di"]
                 )
             )
             stabilizing = (
@@ -269,8 +309,8 @@ class RiskManagedMartingaleStrategy(IStrategy):
             trend_broken = (
                 (last_candle["close"] < last_candle["ema_200"] * 0.94)
                 or (
-                    last_candle["ema_50"] < last_candle["ema_200"]
-                    and last_candle["close"] < last_candle["ema_200"]
+                    last_candle["ema_50"] < last_candle["ema_100"]
+                    and last_candle["minus_di"] > last_candle["plus_di"]
                 )
             )
             stabilizing = (
@@ -283,7 +323,7 @@ class RiskManagedMartingaleStrategy(IStrategy):
         if not stabilizing:
             return None
 
-        if last_candle["atr_pct"] > 0.10:
+        if last_candle["atr_pct"] > 0.08:
             return None
 
         filled_entries = trade.select_filled_orders(trade.entry_side)
