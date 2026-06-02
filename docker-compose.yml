@@ -1,36 +1,37 @@
 ---
 services:
   freqtrade:
-    image: freqtradeorg/freqtrade:stable
-    # image: freqtradeorg/freqtrade:develop
-    # Use plotting image
-    # image: freqtradeorg/freqtrade:develop_plot
-    # # Enable GPU Image and GPU Resources (only relevant for freqAI)
-    # # Make sure to uncomment the whole deploy section
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-    # Build step - only needed when additional dependencies are needed
-    # build:
-    #   context: .
-    #   dockerfile: "./docker/Dockerfile.custom"
+    image: "${FREQTRADE_IMAGE:?Set FREQTRADE_IMAGE in .env}"
     restart: unless-stopped
-    container_name: freqtrade
+    container_name: ${FREQTRADE_CONTAINER_NAME:-freqtrade}
     volumes:
       - "./user_data:/freqtrade/user_data"
-    # Expose api on port 8080 (localhost only)
-    # Please read the https://www.freqtrade.io/en/stable/rest-api/ documentation
-    # for more information.
+      - "./freqtrade/rpc/api_server/ui/installed:/freqtrade/freqtrade/rpc/api_server/ui/installed"
     ports:
-      - "127.0.0.1:8080:8080"
-    # Default command used when running `docker compose up`
+      - "${FREQTRADE_API_BIND:-127.0.0.1}:${FREQTRADE_API_PORT:-8080}:8080"
     command: >
       trade
       --logfile /freqtrade/user_data/logs/freqtrade.log
       --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-      --config /freqtrade/user_data/config.json
-      --strategy SampleStrategy
+      --config /freqtrade/user_data/config_martingale.json
+      --strategy RiskManagedMartingaleStrategy
+
+  frequi-init:
+    image: "${FREQTRADE_IMAGE:?Set FREQTRADE_IMAGE in .env}"
+    container_name: ${FREQUI_INIT_CONTAINER_NAME:-frequi-init}
+    volumes:
+      - "./freqtrade/rpc/api_server/ui/installed:/freqtrade/freqtrade/rpc/api_server/ui/installed"
+    command: >
+      install-ui
+
+  frequi:
+    image: ${FREQUI_IMAGE:-nginx:1.27-alpine}
+    restart: unless-stopped
+    container_name: ${FREQUI_CONTAINER_NAME:-frequi}
+    depends_on:
+      frequi-init:
+        condition: service_completed_successfully
+    volumes:
+      - "./freqtrade/rpc/api_server/ui/installed:/usr/share/nginx/html:ro"
+    ports:
+      - "${FREQUI_BIND:-127.0.0.1}:${FREQUI_PORT:-8081}:80"
