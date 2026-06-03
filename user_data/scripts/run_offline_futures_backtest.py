@@ -23,11 +23,11 @@ DEFAULT_PAIRS = [
     "SOL/USDT:USDT",
     "BNB/USDT:USDT",
     "XRP/USDT:USDT",
-    "DOGE/USDT:USDT",
-    "ADA/USDT:USDT",
     "AVAX/USDT:USDT",
     "LINK/USDT:USDT",
-    "LTC/USDT:USDT",
+    "MKR/USDT:USDT",
+    "BCH/USDT:USDT",
+    "TRX/USDT:USDT",
 ]
 
 PRICE_TICKS = {
@@ -41,6 +41,9 @@ PRICE_TICKS = {
     "AVAX": 0.001,
     "LINK": 0.001,
     "LTC": 0.01,
+    "MKR": 0.1,
+    "BCH": 0.01,
+    "TRX": 0.00001,
 }
 
 AMOUNT_TICKS = {
@@ -54,6 +57,9 @@ AMOUNT_TICKS = {
     "AVAX": 0.1,
     "LINK": 0.1,
     "LTC": 0.001,
+    "MKR": 0.001,
+    "BCH": 0.001,
+    "TRX": 1.0,
 }
 
 
@@ -133,6 +139,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timerange", default="20230602-20260531")
     parser.add_argument("--timeframe", default="1h")
     parser.add_argument("--timeframe-detail", default="15m")
+    parser.add_argument(
+        "--pairs",
+        nargs="+",
+        default=None,
+        help="Optional pair whitelist overriding the config, e.g. BTC/USDT:USDT ETH/USDT:USDT.",
+    )
     parser.add_argument("--export", default="trades")
     parser.add_argument("--breakdown", nargs="+", default=["month", "year"])
     parser.add_argument("--cache", default="none")
@@ -164,6 +176,8 @@ def main() -> None:
 
     parsed = Arguments(cli_args).get_parsed_arg()
     config = setup_optimize_configuration(parsed, RunMode.BACKTEST)
+    if args.pairs:
+        config["exchange"]["pair_whitelist"] = args.pairs
     exchange = inject_offline_markets(config)
     backtesting = Backtesting(config, exchange=exchange)
     backtesting.start()
