@@ -140,6 +140,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeframe", default="1h")
     parser.add_argument("--timeframe-detail", default="15m")
     parser.add_argument(
+        "--no-timeframe-detail",
+        action="store_true",
+        help="Disable detail timeframe for faster broad universe screening.",
+    )
+    parser.add_argument(
         "--pairs",
         nargs="+",
         default=None,
@@ -163,13 +168,13 @@ def main() -> None:
         args.timerange,
         "--timeframe",
         args.timeframe,
-        "--timeframe-detail",
-        args.timeframe_detail,
         "--export",
         args.export,
         "--cache",
         args.cache,
     ]
+    if not args.no_timeframe_detail and args.timeframe_detail:
+        cli_args.extend(["--timeframe-detail", args.timeframe_detail])
     if args.breakdown:
         cli_args.append("--breakdown")
         cli_args.extend(args.breakdown)
