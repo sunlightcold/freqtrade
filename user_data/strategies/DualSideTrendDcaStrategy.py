@@ -30,6 +30,8 @@ class DualSideTrendDcaStrategy(IStrategy):
     position_adjustment_enable = True
     max_entry_position_adjustment = 3
     max_dca_multiplier = 4.6
+    weak_long_pairs = ("ETH/",)
+    weak_short_pairs = ("AVAX/", "OP/")
 
     minimal_roi = {
         "240": 0.004,
@@ -229,9 +231,14 @@ class DualSideTrendDcaStrategy(IStrategy):
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        pair = metadata["pair"]
+        allow_long = not pair.startswith(self.weak_long_pairs)
+        allow_short = not pair.startswith(self.weak_short_pairs)
+
         dataframe.loc[
             (
-                dataframe["long_regime"]
+                allow_long
+                & dataframe["long_regime"]
                 & dataframe["risk_ok"]
                 & (dataframe["ema_8"] > dataframe["ema_21"] * 1.0005)
                 & (dataframe["ema_21_slope"] > -0.0015)
@@ -248,7 +255,8 @@ class DualSideTrendDcaStrategy(IStrategy):
 
         dataframe.loc[
             (
-                dataframe["short_regime"]
+                allow_short
+                & dataframe["short_regime"]
                 & dataframe["risk_ok"]
                 & (dataframe["ema_8"] < dataframe["ema_21"] * 0.9995)
                 & (dataframe["ema_21_slope"] < 0.0015)
