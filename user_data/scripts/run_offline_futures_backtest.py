@@ -150,6 +150,9 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional pair whitelist overriding the config, e.g. BTC/USDT:USDT ETH/USDT:USDT.",
     )
+    parser.add_argument("--stake-amount", default=None)
+    parser.add_argument("--max-open-trades", type=int, default=None)
+    parser.add_argument("--dry-run-wallet", default=None)
     parser.add_argument("--export", default="trades")
     parser.add_argument("--breakdown", nargs="+", default=["month", "year"])
     parser.add_argument("--cache", default="none")
@@ -175,6 +178,12 @@ def main() -> None:
     ]
     if not args.no_timeframe_detail and args.timeframe_detail:
         cli_args.extend(["--timeframe-detail", args.timeframe_detail])
+    if args.stake_amount:
+        cli_args.extend(["--stake-amount", args.stake_amount])
+    if args.max_open_trades is not None:
+        cli_args.extend(["--max-open-trades", str(args.max_open_trades)])
+    if args.dry_run_wallet:
+        cli_args.extend(["--dry-run-wallet", args.dry_run_wallet])
     if args.breakdown:
         cli_args.append("--breakdown")
         cli_args.extend(args.breakdown)
