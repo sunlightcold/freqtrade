@@ -470,3 +470,53 @@ class Intp20Stage7AggressiveCoreStrategy(Intp20Stage7AggressivePortfolioStrategy
         dataframe.loc[~keep, ["stage7_enter_long", "stage7_enter_short"]] = False
         dataframe.loc[~keep, "stage7_enter_tag"] = None
         return dataframe
+
+
+class Intp20Stage8NoSuiCoreStrategy(Intp20Stage7AggressiveCoreStrategy):
+    """
+    Stage-8 first pruning pass.
+
+    `sui_rsi_short_aligned_h24` was the largest native walk-forward drag in
+    2024, while its 2025/2026 contribution was not large enough to justify the
+    extra tail risk. This keeps the rest of the Stage-7 core unchanged so the
+    impact of that single removal is directly comparable.
+    """
+
+    included_tags = Intp20Stage7AggressiveCoreStrategy.included_tags - {
+        "sui_rsi_short_aligned_h24",
+    }
+
+    @staticmethod
+    def _build_pair_signals(dataframe: DataFrame, pair: str) -> DataFrame:
+        dataframe = Intp20Stage7AggressivePortfolioStrategy._build_pair_signals(dataframe, pair)
+        keep = dataframe["stage7_enter_tag"].isin(Intp20Stage8NoSuiCoreStrategy.included_tags)
+        dataframe.loc[~keep, ["stage7_enter_long", "stage7_enter_short"]] = False
+        dataframe.loc[~keep, "stage7_enter_tag"] = None
+        return dataframe
+
+
+class Intp20Stage8LeaderCoreStrategy(Intp20Stage8NoSuiCoreStrategy):
+    """
+    Stage-8 conservative leader-only basket.
+
+    Keeps the tags with the clearest native contribution across the validation
+    slices. This variant is expected to trade less often, but it tests whether a
+    cleaner basket can reduce drawdown enough to support higher exposure.
+    """
+
+    included_tags = {
+        "mkr_range_short_h24",
+        "aave_panic_long_h24",
+        "xlm_panic_long_h12",
+        "sol_panic_short_h24",
+        "xtz_rsi_short_h24",
+        "xrp_rsi_short_h24",
+    }
+
+    @staticmethod
+    def _build_pair_signals(dataframe: DataFrame, pair: str) -> DataFrame:
+        dataframe = Intp20Stage7AggressivePortfolioStrategy._build_pair_signals(dataframe, pair)
+        keep = dataframe["stage7_enter_tag"].isin(Intp20Stage8LeaderCoreStrategy.included_tags)
+        dataframe.loc[~keep, ["stage7_enter_long", "stage7_enter_short"]] = False
+        dataframe.loc[~keep, "stage7_enter_tag"] = None
+        return dataframe
