@@ -155,3 +155,80 @@ Stage 3 did not reach or approach 0.5% daily. The main improvement was tooling:
 we can now reject coarse overfit faster and translate candidates into native
 Freqtrade validation. Next search should add regime-conditioned exits and
 portfolio construction, because naive fixed-hold exits erase many coarse edges.
+
+## Stage 4: Bracket Exit Rejection
+
+The bracket-exit screener was tested against ETC wick-reversal shorts because
+the coarse ranking looked better than the Stage-3 ETC breakout candidate.
+Native Freqtrade validation rejected the idea:
+
+| Candidate | Window | Result | Decision |
+| --- | --- | ---: | --- |
+| `Intp20Stage4BracketEtcWickShortStrategy` | 2025-01-01..2025-03-01 | -0.83% | Reject |
+| `Intp20Stage4LooseEtcWickShortStrategy` | 2025-01-01..2025-03-01 | -2.39% | Reject |
+
+The failed strategy classes were not kept in the strategy file. The useful
+artifact from this stage is the faster bracket-exit simulator.
+
+## Stage 5: Regime-Aware 1m/5m Scalp Search
+
+The screener was expanded with BTC market-regime filters, local trend/chop
+filters, stream loading for 1m data, and higher-frequency templates:
+
+- `rsi_reversion`
+- `stoch_turn`
+- `range_breakout`
+- `ema_cross_scalp`
+- `panic_snapback`
+- `liquidity_sweep`
+
+Generated CSV snapshots:
+
+- `user_data/research/stage5_per_pair_5m_compact_fixed.csv`
+- `user_data/research/stage5_per_pair_1m_focus_fixed.csv`
+
+Best 5m fixed-hold candidates from the coarse screener:
+
+| Rank | Pair | Template | Side | Regime | Hold | Coarse Daily | Min Slice Daily | Trades/Day | Max DD |
+| ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | XRP | RSI reversion | short | market extreme | 24 | 0.097% | 0.094% | 0.057 | 25.87% |
+| 5 | XTZ | RSI reversion | short | local chop | 24 | 0.087% | 0.110% | 0.137 | 45.18% |
+| 7 | XTZ | panic snapback | long | market contra | 24 | 0.152% | 0.044% | 0.115 | 30.79% |
+| 15 | LINK | panic snapback | long | market contra | 12 | 0.074% | 0.056% | 0.144 | 31.90% |
+
+Best 1m focused candidates from the coarse screener:
+
+| Rank | Pair | Template | Side | Regime | Hold | Coarse Daily | Min Slice Daily | Trades/Day | Max DD |
+| ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | LINK | panic snapback | long | market contra | 40 | 0.213% | 0.072% | 0.101 | 53.87% |
+| 3 | XRP | panic snapback | long | market contra | 40 | 0.151% | 0.033% | 0.255 | 52.78% |
+| 7 | SOL | panic snapback | long | market contra | 40 | 0.091% | -0.005% | 0.110 | 46.43% |
+
+### Native Validation
+
+`Intp20Stage5LinkPanicLongStrategy` converted the top 1m LINK candidate into
+native Freqtrade entries with a 40-minute fixed-hold exit and 4x leverage.
+
+The first validation window rejected the raw version:
+
+| Strategy | Window | Result | DD | Notes |
+| --- | --- | ---: | ---: | --- |
+| `Intp20Stage5LinkPanicLongStrategy` | 2025-01-01..2025-03-01 | -3.11% | 5.28% | One -35% leveraged stop erased small winners |
+| `Intp20Stage5LinkPanicWideStopStrategy` | 2025-01-01..2025-03-01 | -2.09% | 4.27% | Wider stop did not restore edge |
+| `Intp20Stage5LinkPanicRiskCutStrategy` | 2025-01-01..2025-03-01 | +0.27% | 2.13% | Short-window only |
+
+Walk-forward validation rejected the risk-cut variant:
+
+| Window | Result | Trades | DD | Decision |
+| --- | ---: | ---: | ---: | --- |
+| 2024 | +11.22% | 38 | 2.19% | Positive but low-frequency |
+| 2025 | -2.54% | 36 | 5.75% | Reject |
+| 2026-01-01..2026-05-31 | -1.99% | 8 | 2.68% | Reject |
+
+### Stage 5 Decision
+
+The 1m search produced higher coarse returns than earlier stages, but the
+best native candidate failed walk-forward and remains far below the requested
+0.5% daily target. The next stage should search multi-candidate portfolios and
+state-dependent exits, because single-pair panic-reversal edges are too sparse
+and too sensitive to tail-loss clusters.
