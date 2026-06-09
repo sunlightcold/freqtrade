@@ -166,6 +166,8 @@ def add_base_indicators(dataframe: pd.DataFrame) -> pd.DataFrame:
     dataframe["don_low_12"] = dataframe["low"].rolling(12).min().shift(1)
     dataframe["don_high_24"] = dataframe["high"].rolling(24).max().shift(1)
     dataframe["don_low_24"] = dataframe["low"].rolling(24).min().shift(1)
+    dataframe["don_high_60"] = dataframe["high"].rolling(60).max().shift(1)
+    dataframe["don_low_60"] = dataframe["low"].rolling(60).min().shift(1)
     dataframe["don_high"] = dataframe["high"].rolling(34).max().shift(1)
     dataframe["don_low"] = dataframe["low"].rolling(34).min().shift(1)
     for period in (1, 3, 6, 12, 24, 48):
@@ -189,6 +191,24 @@ def add_base_indicators(dataframe: pd.DataFrame) -> pd.DataFrame:
     dataframe["vwap_24"] = (
         (typical_price * dataframe["volume"]).rolling(24).sum()
         / dataframe["volume"].rolling(24).sum()
+    )
+    dataframe["vwap_96_dist"] = dataframe["close"] / dataframe["vwap_96"] - 1
+    dataframe["vwap_96_dist_mean"] = dataframe["vwap_96_dist"].rolling(96).mean()
+    dataframe["vwap_96_dist_std"] = dataframe["vwap_96_dist"].rolling(96).std()
+    dataframe["vwap_96_z"] = (
+        (dataframe["vwap_96_dist"] - dataframe["vwap_96_dist_mean"])
+        / dataframe["vwap_96_dist_std"]
+    )
+    session_minute = dataframe.index.hour * 60 + dataframe.index.minute
+    dataframe["session_minute"] = session_minute
+    session_day = dataframe.index.floor("D")
+    open_window = session_minute < 30
+    orb_high = dataframe["high"].where(open_window).groupby(session_day).transform("max")
+    orb_low = dataframe["low"].where(open_window).groupby(session_day).transform("min")
+    dataframe["orb_high_30"] = orb_high.where(session_minute >= 30)
+    dataframe["orb_low_30"] = orb_low.where(session_minute >= 30)
+    dataframe["orb_range_30_pct"] = (
+        (dataframe["orb_high_30"] - dataframe["orb_low_30"]) / dataframe["close"]
     )
     low_14 = dataframe["low"].rolling(14).min()
     high_14 = dataframe["high"].rolling(14).max()
@@ -664,6 +684,105 @@ def signal_liquidity_sweep(dataframe: pd.DataFrame, side: str, params: dict) -> 
         & (dataframe["close"] < dataframe["vwap_24"] * (1 + params["vwap_pad"]))
         & (dataframe["rsi_2"] > 100 - params["rsi_2"])
         & (dataframe["roc_24"] < params["macro_limit"])
+    )
+
+
+def signal_orb_breakout(dataframe: pd.DataFrame, side: str, params: dict) -> pd.Series:
+    crossed_above_orb = (dataframe["close"] > dataframe["orb_high_30"] * (1 + params["break_pad"])) & (
+        dataframe["close"].shift(1) <= dataframe["orb_high_30"].shift(1) * (1 + params["break_pad"])
+    )
+    crossed_below_orb = (dataframe["close"] < dataframe["orb_low_30"] * (1 - params["break_pad"])) & (
+        dataframe["close"].shift(1) >= dataframe["orb_low_30"].shift(1) * (1 - params["break_pad"])
+    )
+    time_ok = (
+        (dataframe["session_minute"] >= params["start_minute"])
+        & (dataframe["session_minute"] <= params["end_minute"])
+    )
+    risk_ok = (
+        time_ok
+        & (dataframe["atr_pct"] > params["atr_floor"])
+        & (dataframe["atr_pct"] < params["atr_ceiling"])
+        & (dataframe["volume"] > dataframe["volume_mean_48"] * params["volume_mult"])
+        & (dataframe["volume_z"] > params["volume_z"])
+        & (dataframe["orb_range_30_pct"] > params["range_floor"])
+        & (dataframe["orb_range_30_pct"] < params["range_ceiling"])
+    )
+    if side == "long":
+        return (
+            risk_ok
+            & crossed_above_orb
+            & (dataframe["close"] > dataframe["vwap_24"])
+            & (dataframe["ema_20_slope"] > -params["slope_tolerance"])
+            & (dataframe["rsi_fast"] > params["rsi_fast"])
+            & (dataframe["rsi"] < params["rsi_cap"])
+        )
+    return (
+        risk_ok
+        & crossed_below_orb
+        & (dataframe["close"] < dataframe["vwap_24"])
+        & (dataframe["ema_20_slope"] < params["slope_tolerance"])
+        & (dataframe["rsi_fast"] < 100 - params["rsi_fast"])
+        & (dataframe["rsi"] > 100 - params["rsi_cap"])
+    )
+
+
+def signal_vwap_stretch_reversion(dataframe: pd.DataFrame, side: str, params: dict) -> pd.Series:
+    risk_ok = (
+        (dataframe["atr_pct"] > params["atr_floor"])
+        & (dataframe["atr_pct"] < params["atr_ceiling"])
+        & (dataframe["volume"] > dataframe["volume_mean_48"] * params["volume_mult"])
+        & (dataframe["bb_width"] > params["bb_width"])
+        & (dataframe["vwap_96_dist"].abs() > params["min_dist"])
+    )
+    if side == "long":
+        return (
+            risk_ok
+            & (dataframe["vwap_96_z"] < -params["z_entry"])
+            & (dataframe["close"] < dataframe["vwap_96"] * (1 - params["min_dist"]))
+            & (dataframe["rsi_2"] < params["rsi_2"])
+            & (dataframe["rsi_fast"] > dataframe["rsi_fast"].shift(1))
+            & (dataframe["close"] > dataframe["low"] + (dataframe["high"] - dataframe["low"]) * params["close_pos"])
+            & (dataframe["roc_24"] > -params["macro_limit"])
+        )
+    return (
+        risk_ok
+        & (dataframe["vwap_96_z"] > params["z_entry"])
+        & (dataframe["close"] > dataframe["vwap_96"] * (1 + params["min_dist"]))
+        & (dataframe["rsi_2"] > 100 - params["rsi_2"])
+        & (dataframe["rsi_fast"] < dataframe["rsi_fast"].shift(1))
+        & (dataframe["close"] < dataframe["high"] - (dataframe["high"] - dataframe["low"]) * params["close_pos"])
+        & (dataframe["roc_24"] < params["macro_limit"])
+    )
+
+
+def signal_ma_offset_reversion(dataframe: pd.DataFrame, side: str, params: dict) -> pd.Series:
+    risk_ok = (
+        (dataframe["atr_pct"] > params["atr_floor"])
+        & (dataframe["atr_pct"] < params["atr_ceiling"])
+        & (dataframe["volume"] > dataframe["volume_mean_48"] * params["volume_mult"])
+        & (dataframe["bb_width"] > params["bb_width"])
+        & (dataframe["range_pct"] > dataframe["atr_pct"] * params["range_mult"])
+    )
+    if side == "long":
+        return (
+            risk_ok
+            & (dataframe["close"] < dataframe["ema_20"] * (1 - params["ema20_offset"]))
+            & (dataframe["close"] > dataframe["ema_50"] * (1 - params["ema50_guard"]))
+            & (dataframe["ema_50_slope"] > -params["slope_guard"])
+            & (dataframe["rsi_2"] < params["rsi_2"])
+            & (dataframe["rsi_fast"] > dataframe["rsi_fast"].shift(1))
+            & (dataframe["close"] > dataframe["open"])
+            & (dataframe["roc_12"] > -params["macro_limit"])
+        )
+    return (
+        risk_ok
+        & (dataframe["close"] > dataframe["ema_20"] * (1 + params["ema20_offset"]))
+        & (dataframe["close"] < dataframe["ema_50"] * (1 + params["ema50_guard"]))
+        & (dataframe["ema_50_slope"] < params["slope_guard"])
+        & (dataframe["rsi_2"] > 100 - params["rsi_2"])
+        & (dataframe["rsi_fast"] < dataframe["rsi_fast"].shift(1))
+        & (dataframe["close"] < dataframe["open"])
+        & (dataframe["roc_12"] < params["macro_limit"])
     )
 
 
@@ -1192,6 +1311,166 @@ def build_candidates(templates: set[str], grid: str) -> list[Candidate]:
                         },
                     )
                 )
+        if "orb_breakout" in templates:
+            orb_grid = {
+                "compact": (
+                    [0.0008, 0.0015],
+                    [0.018, 0.030],
+                    [0.8],
+                    [0.3],
+                    [0.0005],
+                    [0.0025],
+                    [0.030],
+                    [45, 60],
+                    [360, 720],
+                ),
+                "wide": (
+                    [0.0005, 0.0010, 0.0020],
+                    [0.016, 0.026, 0.040],
+                    [0.6, 1.0],
+                    [0.0, 0.5],
+                    [0.0002, 0.0008],
+                    [0.0015, 0.0035],
+                    [0.020, 0.045],
+                    [35, 60, 120],
+                    [240, 720, 1080],
+                ),
+            }[grid]
+            for (
+                atr_floor,
+                atr_ceiling,
+                volume_mult,
+                volume_z,
+                break_pad,
+                range_floor,
+                range_ceiling,
+                start_minute,
+                end_minute,
+            ) in itertools.product(*orb_grid):
+                candidates.append(
+                    Candidate(
+                        "orb_breakout",
+                        side,
+                        {
+                            "atr_floor": atr_floor,
+                            "atr_ceiling": atr_ceiling,
+                            "volume_mult": volume_mult,
+                            "volume_z": volume_z,
+                            "break_pad": break_pad,
+                            "range_floor": range_floor,
+                            "range_ceiling": range_ceiling,
+                            "start_minute": start_minute,
+                            "end_minute": end_minute,
+                            "slope_tolerance": 0.0012,
+                            "rsi_fast": 54,
+                            "rsi_cap": 76,
+                        },
+                    )
+                )
+        if "vwap_stretch_reversion" in templates:
+            stretch_grid = {
+                "compact": (
+                    [0.0006, 0.0012],
+                    [0.018, 0.030],
+                    [0.7],
+                    [0.0025],
+                    [0.0020, 0.0035],
+                    [1.8, 2.4],
+                    [10, 14],
+                    [0.35],
+                ),
+                "wide": (
+                    [0.0004, 0.0008, 0.0015],
+                    [0.014, 0.024, 0.040],
+                    [0.5, 0.9],
+                    [0.0018, 0.0035],
+                    [0.0015, 0.0030, 0.0050],
+                    [1.5, 2.0, 2.6],
+                    [8, 12, 16],
+                    [0.30, 0.45],
+                ),
+            }[grid]
+            for (
+                atr_floor,
+                atr_ceiling,
+                volume_mult,
+                bb_width,
+                min_dist,
+                z_entry,
+                rsi_2,
+                close_pos,
+            ) in itertools.product(*stretch_grid):
+                candidates.append(
+                    Candidate(
+                        "vwap_stretch_reversion",
+                        side,
+                        {
+                            "atr_floor": atr_floor,
+                            "atr_ceiling": atr_ceiling,
+                            "volume_mult": volume_mult,
+                            "bb_width": bb_width,
+                            "min_dist": min_dist,
+                            "z_entry": z_entry,
+                            "rsi_2": rsi_2,
+                            "close_pos": close_pos,
+                            "macro_limit": 0.055,
+                        },
+                    )
+                )
+        if "ma_offset_reversion" in templates:
+            offset_grid = {
+                "compact": (
+                    [0.0006, 0.0012],
+                    [0.018, 0.030],
+                    [0.7],
+                    [0.0025],
+                    [0.60],
+                    [0.0020, 0.0035],
+                    [0.020],
+                    [0.0030],
+                    [10, 14],
+                ),
+                "wide": (
+                    [0.0004, 0.0008, 0.0015],
+                    [0.014, 0.024, 0.040],
+                    [0.5, 0.9],
+                    [0.0018, 0.0035],
+                    [0.45, 0.75],
+                    [0.0015, 0.0030, 0.0050],
+                    [0.014, 0.024],
+                    [0.0020, 0.0045],
+                    [8, 12, 16],
+                ),
+            }[grid]
+            for (
+                atr_floor,
+                atr_ceiling,
+                volume_mult,
+                bb_width,
+                range_mult,
+                ema20_offset,
+                ema50_guard,
+                slope_guard,
+                rsi_2,
+            ) in itertools.product(*offset_grid):
+                candidates.append(
+                    Candidate(
+                        "ma_offset_reversion",
+                        side,
+                        {
+                            "atr_floor": atr_floor,
+                            "atr_ceiling": atr_ceiling,
+                            "volume_mult": volume_mult,
+                            "bb_width": bb_width,
+                            "range_mult": range_mult,
+                            "ema20_offset": ema20_offset,
+                            "ema50_guard": ema50_guard,
+                            "slope_guard": slope_guard,
+                            "rsi_2": rsi_2,
+                            "macro_limit": 0.055,
+                        },
+                    )
+                )
     return candidates
 
 
@@ -1222,6 +1501,12 @@ def signals_for(candidate: Candidate, dataframe: pd.DataFrame) -> pd.Series:
         signal = signal_panic_snapback(dataframe, candidate.side, candidate.params)
     elif candidate.template == "liquidity_sweep":
         signal = signal_liquidity_sweep(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "orb_breakout":
+        signal = signal_orb_breakout(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "vwap_stretch_reversion":
+        signal = signal_vwap_stretch_reversion(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "ma_offset_reversion":
+        signal = signal_ma_offset_reversion(dataframe, candidate.side, candidate.params)
     else:
         raise ValueError(candidate.template)
     return signal & regime_filter(dataframe, candidate.regime, candidate.side)
@@ -1583,6 +1868,9 @@ def main() -> None:
             "ema_cross_scalp",
             "panic_snapback",
             "liquidity_sweep",
+            "orb_breakout",
+            "vwap_stretch_reversion",
+            "ma_offset_reversion",
         ],
     )
     parser.add_argument("--grid", choices=["compact", "wide"], default="compact")
@@ -1635,6 +1923,9 @@ def main() -> None:
         "ema_cross_scalp",
         "panic_snapback",
         "liquidity_sweep",
+        "orb_breakout",
+        "vwap_stretch_reversion",
+        "ma_offset_reversion",
     }
     templates = available_templates if "all" in args.templates else set(args.templates)
 
