@@ -1005,10 +1005,13 @@ def main() -> None:
     )
     parser.add_argument("--grid", choices=["compact", "wide"], default="compact")
     parser.add_argument("--mode", choices=["portfolio", "per-pair"], default="portfolio")
+    parser.add_argument("--exit-mode", choices=["fixed", "bracket"], default="fixed")
     parser.add_argument("--top", type=int, default=30)
     parser.add_argument("--fee", type=float, default=0.0005)
     parser.add_argument("--leverage", type=float, default=4.0)
     parser.add_argument("--holds", nargs="+", type=int, default=[3, 6, 12, 24])
+    parser.add_argument("--tps", nargs="+", type=float, default=[0.006, 0.010, 0.016])
+    parser.add_argument("--sls", nargs="+", type=float, default=[0.006, 0.010, 0.016])
     parser.add_argument("--min-signals", type=int, default=10)
     parser.add_argument("--export-csv", default=None)
     args = parser.parse_args()
@@ -1039,16 +1042,31 @@ def main() -> None:
                 if int(signals.sum()) < args.min_signals:
                     continue
                 for hold in args.holds:
-                    result = evaluate_candidate_fixed_hold(
-                        {pair: dataframe},
-                        candidate,
-                        {pair: signals},
-                        hold,
-                        args.fee,
-                        args.leverage,
-                    )
-                    result["scope"] = pair
-                    results.append(result)
+                    if args.exit_mode == "fixed":
+                        result = evaluate_candidate_fixed_hold(
+                            {pair: dataframe},
+                            candidate,
+                            {pair: signals},
+                            hold,
+                            args.fee,
+                            args.leverage,
+                        )
+                        result["scope"] = pair
+                        results.append(result)
+                    else:
+                        for tp, sl in itertools.product(args.tps, args.sls):
+                            result = evaluate_candidate_with_signals(
+                                {pair: dataframe},
+                                candidate,
+                                {pair: signals},
+                                hold,
+                                tp,
+                                sl,
+                                args.fee,
+                                args.leverage,
+                            )
+                            result["scope"] = pair
+                            results.append(result)
             continue
 
         pair_signals = {
@@ -1058,16 +1076,31 @@ def main() -> None:
         if sum(int(signals.sum()) for signals in pair_signals.values()) < args.min_signals:
             continue
         for hold in args.holds:
-            result = evaluate_candidate_fixed_hold(
-                pair_data,
-                candidate,
-                pair_signals,
-                hold,
-                args.fee,
-                args.leverage,
-            )
-            result["scope"] = "portfolio"
-            results.append(result)
+            if args.exit_mode == "fixed":
+                result = evaluate_candidate_fixed_hold(
+                    pair_data,
+                    candidate,
+                    pair_signals,
+                    hold,
+                    args.fee,
+                    args.leverage,
+                )
+                result["scope"] = "portfolio"
+                results.append(result)
+            else:
+                for tp, sl in itertools.product(args.tps, args.sls):
+                    result = evaluate_candidate_with_signals(
+                        pair_data,
+                        candidate,
+                        pair_signals,
+                        hold,
+                        tp,
+                        sl,
+                        args.fee,
+                        args.leverage,
+                    )
+                    result["scope"] = "portfolio"
+                    results.append(result)
 
     results.sort(key=lambda item: item["total"]["robust_score"], reverse=True)
 
