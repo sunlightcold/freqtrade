@@ -57,16 +57,27 @@ The likely next useful adaptation is not more entry filtering, but a separate
 exit/risk module: chandelier/ATR loss exit, pair-specific stop caps, or a
 volatility breakout system tested as its own strategy.
 
+## Rejected Next-Stage Adaptations
+
+- Standalone volatility breakout: `Intp20VolatilityBreakoutStrategy` tested the
+  official futures volatility-system idea as a separate trend breakout stream.
+  It lost 24.14% with 44.51% max drawdown over 2023-06-05 to 2026-05-31. The
+  high win rate was not useful because a small number of full stoplosses erased
+  the winners. The class was removed.
+- Chandelier/ATR early loss exits reduced some drawdown on shorts, but killed
+  long-side expectancy and did not improve the retained long engine.
+- Pair-weighted short sizing did not improve the short hedge engine enough to
+  justify extra complexity.
+
 ## Next Research Queue
 
-1. Build a standalone futures volatility strategy from the official
-   `VolatilitySystem` idea and test it on the INTP20 universe.
-2. Add a local chandelier-exit candidate to a copy of the moonshot strategy and
-   check whether it cuts the 2024 drawdown without killing 2026 upside.
+1. Test an explicit loss-avoidance module for the retained long top6: use
+   trade-context features around the six retained stoplosses, not broad entry
+   filters that leave results unchanged.
+2. Re-rank pairs monthly by local volume, ATR, and trend strength, then compare
+   static top6 versus rolling pair selection.
 3. Test OBV/volume confirmation only on losing long pairs first: `APT`, `ETC`,
    `XLM`, `XTZ`.
-4. Re-rank pairs monthly by local volume, ATR, and trend strength, then compare
-   static versus rolling pair selection.
-5. Only after rule-based variants plateau, test FreqAI-style regime
+4. Only after rule-based variants plateau, test FreqAI-style regime
    classification. Do not use model output directly for entries until leakage
    and walk-forward stability are checked.

@@ -175,3 +175,48 @@ The long moonshot profile is a higher-return, higher-drawdown research variant,
 but the tested path to 200% CAGR required either near-account-death drawdowns or
 failed outright. Treat 200% CAGR as an unproven target that needs a materially
 different signal engine, not just more leverage.
+
+## 2026-06-09 Nextgen Capital-Weighted Study
+
+The next-stage study kept the moonshot long signal engine, then tested whether
+capital allocation and pair pruning could improve return quality without losing
+too much upside. The useful retained long candidate is:
+
+| Slice | Strategy | Pair pool | Stake | Full return | CAGR | Max drawdown | Profit factor |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Long nextgen reliable | `Intp20LongNextGenWeightedDcaStrategy` | `MKR`, `AVAX`, `LTC`, `DOGE`, `BTC`, `XLM` | 9900 | 232.64% | 49.55% | 16.58% | 3.22 |
+
+Rejected or secondary long variants:
+
+| Variant | Change | Full return | CAGR | Max drawdown | Profit factor | Decision |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Top7 weighted | Adds `SOL` | 236.80% | 50.17% | 20.76% | 2.50 | Secondary: higher return, weaker risk quality |
+| Top6 no XLM | Keeps `SOL`, removes `XLM` | 228.12% | 48.87% | 20.35% | 2.71 | Reject: worse than no-SOL top6 |
+| Top5 weighted | Removes both `SOL` and `XLM` | 221.90% | 47.92% | 16.41% | 3.77 | Secondary: best PF, but lower return |
+| Stake 10000 top7 | Max fixed stake | -0.43% | -0.14% | 15.92% | 0.98 | Reject: first loss stalls the bot |
+
+The selected top6 preset drops `SOL`: it sacrifices about 4.16 percentage points
+of full-period return versus top7, but improves max drawdown by 4.18 percentage
+points and improves profit factor from 2.50 to 3.22.
+
+The short-account next-stage preset is:
+
+| Slice | Strategy | Pair pool | Stake | Full return | CAGR | Max drawdown | Profit factor |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Short risk-adjusted | `Intp20ShortRiskAdjustedDcaStrategy` | `DOGE`, `BCH`, `XRP`, `APT` | 8500 | 73.22% | 20.20% | 12.76% | 2.14 |
+
+Rejected short variants:
+
+- `stake_amount=9000` stopped after the first DOGE stoploss and ended at
+  -14.95%.
+- A pair-weighted short variant at `stake_amount=8500` returned only 73.27% and
+  worsened max drawdown to 14.35%, so it was not retained.
+
+Deployment interpretation:
+
+- Use `config_binance_20pair_long_nextgen_weighted.json` as the default long
+  subaccount research preset.
+- Use `config_binance_20pair_short_risk_adjusted.json` as the short hedge preset.
+- These are still research profiles. The long side is the real return engine;
+  the short side remains a modest hedge engine and should not be sized as if it
+  has the same expectancy as the long side.
