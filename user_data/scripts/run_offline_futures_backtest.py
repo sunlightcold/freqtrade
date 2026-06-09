@@ -151,10 +151,10 @@ def inject_offline_markets(config: dict):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run offline Binance futures backtesting.")
     parser.add_argument("-c", "--config", default="user_data/config_martingale.json")
-    parser.add_argument("--strategy", default="RiskManagedMartingaleStrategy")
+    parser.add_argument("--strategy", default=None)
     parser.add_argument("--timerange", default="20230602-20260531")
-    parser.add_argument("--timeframe", default="1h")
-    parser.add_argument("--timeframe-detail", default="15m")
+    parser.add_argument("--timeframe", default=None)
+    parser.add_argument("--timeframe-detail", default=None)
     parser.add_argument(
         "--no-timeframe-detail",
         action="store_true",
@@ -181,17 +181,17 @@ def main() -> None:
         "backtesting",
         "-c",
         str(Path(args.config)),
-        "--strategy",
-        args.strategy,
         "--timerange",
         args.timerange,
-        "--timeframe",
-        args.timeframe,
         "--export",
         args.export,
         "--cache",
         args.cache,
     ]
+    if args.strategy:
+        cli_args.extend(["--strategy", args.strategy])
+    if args.timeframe:
+        cli_args.extend(["--timeframe", args.timeframe])
     if not args.no_timeframe_detail and args.timeframe_detail:
         cli_args.extend(["--timeframe-detail", args.timeframe_detail])
     if args.stake_amount:
