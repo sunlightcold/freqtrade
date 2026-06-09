@@ -242,3 +242,141 @@ class DualSideIntp20DcaStrategy(DualSideFilteredWider26DcaStrategy):
             target = 3.0
 
         return min(target, max_leverage, 5.0)
+
+
+class Intp20LongOnlyDcaStrategy(DualSideIntp20DcaStrategy):
+    """
+    Long-account research slice for Binance subaccount A.
+    """
+
+    weak_long_pairs = ()
+    weak_short_pairs = (
+        "AAVE/",
+        "APT/",
+        "AVAX/",
+        "BCH/",
+        "BNB/",
+        "BTC/",
+        "COMP/",
+        "DOGE/",
+        "ETC/",
+        "ETH/",
+        "LINK/",
+        "LTC/",
+        "MKR/",
+        "OP/",
+        "SOL/",
+        "SUI/",
+        "TRX/",
+        "XLM/",
+        "XRP/",
+        "XTZ/",
+    )
+
+
+class Intp20ShortOnlyDcaStrategy(DualSideIntp20DcaStrategy):
+    """
+    Short-account research slice for Binance subaccount B.
+    """
+
+    weak_long_pairs = (
+        "AAVE/",
+        "APT/",
+        "AVAX/",
+        "BCH/",
+        "BNB/",
+        "BTC/",
+        "COMP/",
+        "DOGE/",
+        "ETC/",
+        "ETH/",
+        "LINK/",
+        "LTC/",
+        "MKR/",
+        "OP/",
+        "SOL/",
+        "SUI/",
+        "TRX/",
+        "XLM/",
+        "XRP/",
+        "XTZ/",
+    )
+    weak_short_pairs = ()
+
+
+class Intp20LongCoreDcaStrategy(Intp20LongOnlyDcaStrategy):
+    """
+    Long-account core pool after first-pass pair attribution.
+    """
+
+    weak_long_pairs = (
+        "AAVE/",
+        "BCH/",
+        "BNB/",
+        "COMP/",
+        "LINK/",
+        "TRX/",
+        "XRP/",
+    )
+
+
+class Intp20ShortCoreDcaStrategy(Intp20ShortOnlyDcaStrategy):
+    """
+    Short-account core pool after first-pass pair attribution.
+    """
+
+    weak_short_pairs = (
+        "AAVE/",
+        "AVAX/",
+        "BNB/",
+        "BTC/",
+        "ETC/",
+        "ETH/",
+        "LTC/",
+        "MKR/",
+        "OP/",
+        "SOL/",
+        "XLM/",
+    )
+
+
+class Intp20LongFocusDcaStrategy(Intp20LongCoreDcaStrategy):
+    """
+    Focused long-account pool after removing weak OP/SUI contribution.
+    """
+
+    weak_long_pairs = (
+        "AAVE/",
+        "BCH/",
+        "BNB/",
+        "COMP/",
+        "LINK/",
+        "OP/",
+        "SUI/",
+        "TRX/",
+        "XRP/",
+    )
+
+
+class Intp20ShortFocusDcaStrategy(Intp20ShortCoreDcaStrategy):
+    """
+    Focused short-account pool keeping only positive first-pass shorts.
+    """
+
+    weak_short_pairs = (
+        "AAVE/",
+        "AVAX/",
+        "BNB/",
+        "BTC/",
+        "COMP/",
+        "ETC/",
+        "ETH/",
+        "LINK/",
+        "LTC/",
+        "MKR/",
+        "OP/",
+        "SOL/",
+        "SUI/",
+        "TRX/",
+        "XLM/",
+    )
