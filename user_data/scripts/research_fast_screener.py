@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import itertools
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -54,6 +54,7 @@ class Candidate:
     template: str
     side: str
     params: dict
+    regime: str = "any"
 
 
 def ema(series: pd.Series, period: int) -> pd.Series:
@@ -100,6 +101,15 @@ def load_pair(data_dir: Path, pair: str, timeframe: str) -> pd.DataFrame:
     )
 
 
+def load_prepared_pair(
+    data_dir: Path,
+    pair: str,
+    timeframe: str,
+    timerange: str | None,
+) -> pd.DataFrame:
+    return add_base_indicators(apply_timerange(load_pair(data_dir, pair, timeframe), timerange))
+
+
 def apply_timerange(dataframe: pd.DataFrame, timerange: str | None) -> pd.DataFrame:
     if not timerange:
         return dataframe
@@ -116,6 +126,8 @@ def apply_timerange(dataframe: pd.DataFrame, timerange: str | None) -> pd.DataFr
 
 def add_base_indicators(dataframe: pd.DataFrame) -> pd.DataFrame:
     dataframe = dataframe.copy()
+    dataframe["ema_3"] = ema(dataframe["close"], 3)
+    dataframe["ema_5"] = ema(dataframe["close"], 5)
     dataframe["ema_8"] = ema(dataframe["close"], 8)
     dataframe["ema_12"] = ema(dataframe["close"], 12)
     dataframe["ema_20"] = ema(dataframe["close"], 20)
@@ -123,6 +135,7 @@ def add_base_indicators(dataframe: pd.DataFrame) -> pd.DataFrame:
     dataframe["ema_50"] = ema(dataframe["close"], 50)
     dataframe["ema_100"] = ema(dataframe["close"], 100)
     dataframe["ema_200"] = ema(dataframe["close"], 200)
+    dataframe["rsi_2"] = rsi(dataframe["close"], 2)
     dataframe["rsi_fast"] = rsi(dataframe["close"], 4)
     dataframe["rsi"] = rsi(dataframe["close"], 14)
     dataframe["atr"] = atr(dataframe, 14)
@@ -145,10 +158,13 @@ def add_base_indicators(dataframe: pd.DataFrame) -> pd.DataFrame:
     )
     dataframe["don_high_12"] = dataframe["high"].rolling(12).max().shift(1)
     dataframe["don_low_12"] = dataframe["low"].rolling(12).min().shift(1)
+    dataframe["don_high_24"] = dataframe["high"].rolling(24).max().shift(1)
+    dataframe["don_low_24"] = dataframe["low"].rolling(24).min().shift(1)
     dataframe["don_high"] = dataframe["high"].rolling(34).max().shift(1)
     dataframe["don_low"] = dataframe["low"].rolling(34).min().shift(1)
-    for period in (3, 6, 12, 24, 48):
+    for period in (1, 3, 6, 12, 24, 48):
         dataframe[f"roc_{period}"] = dataframe["close"] / dataframe["close"].shift(period) - 1
+    dataframe["ema_8_slope"] = dataframe["ema_8"] / dataframe["ema_8"].shift(8) - 1
     dataframe["ema_20_slope"] = dataframe["ema_20"] / dataframe["ema_20"].shift(12) - 1
     dataframe["ema_50_slope"] = dataframe["ema_50"] / dataframe["ema_50"].shift(24) - 1
     dataframe["range_pct"] = (dataframe["high"] - dataframe["low"]) / dataframe["close"]
@@ -164,6 +180,40 @@ def add_base_indicators(dataframe: pd.DataFrame) -> pd.DataFrame:
         (typical_price * dataframe["volume"]).rolling(96).sum()
         / dataframe["volume"].rolling(96).sum()
     )
+    dataframe["vwap_24"] = (
+        (typical_price * dataframe["volume"]).rolling(24).sum()
+        / dataframe["volume"].rolling(24).sum()
+    )
+    low_14 = dataframe["low"].rolling(14).min()
+    high_14 = dataframe["high"].rolling(14).max()
+    dataframe["stoch_k"] = 100 * (dataframe["close"] - low_14) / (high_14 - low_14)
+    dataframe["stoch_d"] = dataframe["stoch_k"].rolling(3).mean()
+    money_flow = typical_price * dataframe["volume"]
+    positive_flow = money_flow.where(typical_price > typical_price.shift(), 0.0)
+    negative_flow = money_flow.where(typical_price < typical_price.shift(), 0.0)
+    money_ratio = (
+        positive_flow.rolling(14).sum()
+        / negative_flow.rolling(14).sum().replace(0, np.nan)
+    )
+    dataframe["mfi"] = 100 - (100 / (1 + money_ratio))
+    typical_mean = typical_price.rolling(20).mean()
+    typical_dev = (typical_price - typical_mean).abs().rolling(20).mean()
+    dataframe["cci"] = (typical_price - typical_mean) / (0.015 * typical_dev)
+    dataframe["local_up"] = (
+        (dataframe["close"] > dataframe["ema_50"])
+        & (dataframe["ema_20"] > dataframe["ema_50"])
+        & (dataframe["ema_20_slope"] > 0)
+    )
+    dataframe["local_down"] = (
+        (dataframe["close"] < dataframe["ema_50"])
+        & (dataframe["ema_20"] < dataframe["ema_50"])
+        & (dataframe["ema_20_slope"] < 0)
+    )
+    dataframe["local_chop"] = (
+        ~dataframe["local_up"]
+        & ~dataframe["local_down"]
+        & (dataframe["bb_width"] < dataframe["bb_width_mean_96"] * 1.10)
+    )
     dataframe["trend_up"] = (
         (dataframe["close"] > dataframe["ema_100"])
         & (dataframe["ema_50"] > dataframe["ema_200"])
@@ -173,6 +223,47 @@ def add_base_indicators(dataframe: pd.DataFrame) -> pd.DataFrame:
         & (dataframe["ema_50"] < dataframe["ema_200"])
     )
     return dataframe
+
+
+def attach_market_regime(pair_data: dict[str, pd.DataFrame], market_pair: str = "BTC") -> None:
+    if market_pair not in pair_data:
+        for dataframe in pair_data.values():
+            dataframe["market_bull"] = True
+            dataframe["market_bear"] = True
+            dataframe["market_chop"] = True
+            dataframe["market_high_vol"] = True
+            dataframe["market_panic_down"] = True
+            dataframe["market_euphoria_up"] = True
+        return
+
+    market = pair_data[market_pair]
+    regime = pd.DataFrame(index=market.index)
+    regime["market_bull"] = (
+        (market["close"] > market["ema_200"])
+        & (market["ema_50_slope"] > 0)
+        & (market["rsi"] > 45)
+    )
+    regime["market_bear"] = (
+        (market["close"] < market["ema_200"])
+        & (market["ema_50_slope"] < 0)
+        & (market["rsi"] < 55)
+    )
+    regime["market_high_vol"] = (
+        (market["atr_pct"] > market["atr_pct"].rolling(288).mean() * 1.20)
+        | (market["bb_width"] > market["bb_width_mean_96"] * 1.25)
+    )
+    regime["market_chop"] = (
+        ~regime["market_bull"]
+        & ~regime["market_bear"]
+        & (market["bb_width"] < market["bb_width_mean_96"] * 1.15)
+    )
+    regime["market_panic_down"] = (market["roc_48"] < -0.035) | (market["roc_24"] < -0.025)
+    regime["market_euphoria_up"] = (market["roc_48"] > 0.035) | (market["roc_24"] > 0.025)
+
+    for dataframe in pair_data.values():
+        aligned = regime.reindex(dataframe.index, method="ffill").fillna(False)
+        for column in aligned.columns:
+            dataframe[column] = aligned[column]
 
 
 def signal_mean_reversion(dataframe: pd.DataFrame, side: str, params: dict) -> pd.Series:
@@ -388,6 +479,221 @@ def signal_wick_reversal(dataframe: pd.DataFrame, side: str, params: dict) -> pd
         & (dataframe["rsi_fast"] > 100 - params["rsi_fast"])
         & (dataframe["roc_12"] < params["roc_limit"])
     )
+
+
+def signal_rsi_reversion(dataframe: pd.DataFrame, side: str, params: dict) -> pd.Series:
+    risk_ok = (
+        (dataframe["atr_pct"] > params["atr_floor"])
+        & (dataframe["atr_pct"] < params["atr_ceiling"])
+        & (dataframe["volume"] > dataframe["volume_mean_48"] * params["volume_mult"])
+        & (dataframe["bb_width"] > params["bb_width"])
+    )
+    if side == "long":
+        return (
+            risk_ok
+            & (dataframe["low"] < dataframe["bb_low"] * params["band_pad"])
+            & (dataframe["rsi_2"] < params["rsi_2_long"])
+            & (dataframe["stoch_k"] < params["stoch_low"])
+            & (dataframe["mfi"] < params["mfi_low"])
+            & (dataframe["roc_12"] > -params["macro_limit"])
+            & (dataframe["close"] > dataframe["low"] + (dataframe["high"] - dataframe["low"]) * 0.35)
+        )
+    return (
+        risk_ok
+        & (dataframe["high"] > dataframe["bb_high"] / params["band_pad"])
+        & (dataframe["rsi_2"] > params["rsi_2_short"])
+        & (dataframe["stoch_k"] > 100 - params["stoch_low"])
+        & (dataframe["mfi"] > 100 - params["mfi_low"])
+        & (dataframe["roc_12"] < params["macro_limit"])
+        & (dataframe["close"] < dataframe["high"] - (dataframe["high"] - dataframe["low"]) * 0.35)
+    )
+
+
+def signal_stoch_turn(dataframe: pd.DataFrame, side: str, params: dict) -> pd.Series:
+    crossed_up = (dataframe["stoch_k"] > dataframe["stoch_d"]) & (
+        dataframe["stoch_k"].shift(1) <= dataframe["stoch_d"].shift(1)
+    )
+    crossed_down = (dataframe["stoch_k"] < dataframe["stoch_d"]) & (
+        dataframe["stoch_k"].shift(1) >= dataframe["stoch_d"].shift(1)
+    )
+    risk_ok = (
+        (dataframe["atr_pct"] > params["atr_floor"])
+        & (dataframe["atr_pct"] < params["atr_ceiling"])
+        & (dataframe["volume"] > dataframe["volume_mean_48"] * params["volume_mult"])
+        & (dataframe["range_pct"] > dataframe["atr_pct"] * params["range_mult"])
+    )
+    if side == "long":
+        return (
+            risk_ok
+            & (dataframe["local_up"] | dataframe["local_chop"])
+            & crossed_up
+            & (dataframe["stoch_k"].shift(1) < params["turn_level"])
+            & (dataframe["rsi_fast"] > dataframe["rsi_fast"].shift(1))
+            & (dataframe["cci"] < params["cci_low"])
+            & (dataframe["roc_6"] > -params["roc_limit"])
+        )
+    return (
+        risk_ok
+        & (dataframe["local_down"] | dataframe["local_chop"])
+        & crossed_down
+        & (dataframe["stoch_k"].shift(1) > 100 - params["turn_level"])
+        & (dataframe["rsi_fast"] < dataframe["rsi_fast"].shift(1))
+        & (dataframe["cci"] > -params["cci_low"])
+        & (dataframe["roc_6"] < params["roc_limit"])
+    )
+
+
+def signal_range_breakout(dataframe: pd.DataFrame, side: str, params: dict) -> pd.Series:
+    squeezed = dataframe["bb_width"].shift(1) < dataframe["bb_width_mean_96"].shift(1) * params["squeeze_mult"]
+    risk_ok = (
+        (dataframe["atr_pct"] > params["atr_floor"])
+        & (dataframe["atr_pct"] < params["atr_ceiling"])
+        & (dataframe["volume_z"] > params["volume_z"])
+        & (dataframe["range_pct"] > dataframe["atr_pct"] * params["range_mult"])
+        & squeezed
+    )
+    if side == "long":
+        return (
+            risk_ok
+            & (dataframe["close"] > dataframe["don_high_24"])
+            & (dataframe["close"] > dataframe["vwap_24"])
+            & (dataframe["ema_8_slope"] > params["slope"])
+            & (dataframe["roc_3"] > params["roc_fast"])
+            & (dataframe["rsi"] > params["rsi_min"])
+            & (dataframe["rsi"] < params["rsi_max"])
+        )
+    return (
+        risk_ok
+        & (dataframe["close"] < dataframe["don_low_24"])
+        & (dataframe["close"] < dataframe["vwap_24"])
+        & (dataframe["ema_8_slope"] < -params["slope"])
+        & (dataframe["roc_3"] < -params["roc_fast"])
+        & (dataframe["rsi"] < 100 - params["rsi_min"])
+        & (dataframe["rsi"] > 100 - params["rsi_max"])
+    )
+
+
+def signal_ema_cross_scalp(dataframe: pd.DataFrame, side: str, params: dict) -> pd.Series:
+    cross_up = (dataframe["ema_3"] > dataframe["ema_8"]) & (
+        dataframe["ema_3"].shift(1) <= dataframe["ema_8"].shift(1)
+    )
+    cross_down = (dataframe["ema_3"] < dataframe["ema_8"]) & (
+        dataframe["ema_3"].shift(1) >= dataframe["ema_8"].shift(1)
+    )
+    risk_ok = (
+        (dataframe["atr_pct"] > params["atr_floor"])
+        & (dataframe["atr_pct"] < params["atr_ceiling"])
+        & (dataframe["volume"] > dataframe["volume_mean_48"] * params["volume_mult"])
+        & (dataframe["bb_width"] > params["bb_width"])
+    )
+    if side == "long":
+        return (
+            risk_ok
+            & cross_up
+            & (dataframe["close"] > dataframe["ema_20"] * (1 - params["ema_pad"]))
+            & (dataframe["ema_20_slope"] > -params["slope_tolerance"])
+            & (dataframe["rsi_fast"] > params["rsi_fast_min"])
+            & (dataframe["rsi_fast"] < params["rsi_fast_max"])
+            & (dataframe["roc_12"] > -params["roc_limit"])
+        )
+    return (
+        risk_ok
+        & cross_down
+        & (dataframe["close"] < dataframe["ema_20"] * (1 + params["ema_pad"]))
+        & (dataframe["ema_20_slope"] < params["slope_tolerance"])
+        & (dataframe["rsi_fast"] < 100 - params["rsi_fast_min"])
+        & (dataframe["rsi_fast"] > 100 - params["rsi_fast_max"])
+        & (dataframe["roc_12"] < params["roc_limit"])
+    )
+
+
+def signal_panic_snapback(dataframe: pd.DataFrame, side: str, params: dict) -> pd.Series:
+    risk_ok = (
+        (dataframe["atr_pct"] > params["atr_floor"])
+        & (dataframe["atr_pct"] < params["atr_ceiling"])
+        & (dataframe["volume_z"] > params["volume_z"])
+        & (dataframe["range_pct"] > dataframe["atr_pct"] * params["range_mult"])
+    )
+    if side == "long":
+        return (
+            risk_ok
+            & (dataframe["roc_3"] < -params["shock"])
+            & (dataframe["low"] < dataframe["don_low_12"])
+            & (dataframe["lower_wick_pct"] > dataframe["body_pct"] * params["wick_body"])
+            & (dataframe["close"] > dataframe["open"])
+            & (dataframe["rsi_fast"] < params["rsi_fast"])
+        )
+    return (
+        risk_ok
+        & (dataframe["roc_3"] > params["shock"])
+        & (dataframe["high"] > dataframe["don_high_12"])
+        & (dataframe["upper_wick_pct"] > dataframe["body_pct"] * params["wick_body"])
+        & (dataframe["close"] < dataframe["open"])
+        & (dataframe["rsi_fast"] > 100 - params["rsi_fast"])
+    )
+
+
+def signal_liquidity_sweep(dataframe: pd.DataFrame, side: str, params: dict) -> pd.Series:
+    risk_ok = (
+        (dataframe["atr_pct"] > params["atr_floor"])
+        & (dataframe["atr_pct"] < params["atr_ceiling"])
+        & (dataframe["volume_z"] > params["volume_z"])
+        & (dataframe["bb_width"] > params["bb_width"])
+    )
+    if side == "long":
+        return (
+            risk_ok
+            & (dataframe["low"] < dataframe["don_low_24"])
+            & (dataframe["close"] > dataframe["don_low_24"])
+            & (dataframe["lower_wick_pct"] > dataframe["atr_pct"] * params["wick_atr"])
+            & (dataframe["close"] > dataframe["vwap_24"] * (1 - params["vwap_pad"]))
+            & (dataframe["rsi_2"] < params["rsi_2"])
+            & (dataframe["roc_24"] > -params["macro_limit"])
+        )
+    return (
+        risk_ok
+        & (dataframe["high"] > dataframe["don_high_24"])
+        & (dataframe["close"] < dataframe["don_high_24"])
+        & (dataframe["upper_wick_pct"] > dataframe["atr_pct"] * params["wick_atr"])
+        & (dataframe["close"] < dataframe["vwap_24"] * (1 + params["vwap_pad"]))
+        & (dataframe["rsi_2"] > 100 - params["rsi_2"])
+        & (dataframe["roc_24"] < params["macro_limit"])
+    )
+
+
+def regime_filter(dataframe: pd.DataFrame, regime: str, side: str) -> pd.Series:
+    if regime == "any":
+        return pd.Series(True, index=dataframe.index)
+    if regime == "local_trend":
+        return dataframe["local_up"] if side == "long" else dataframe["local_down"]
+    if regime == "local_chop":
+        return dataframe["local_chop"]
+    if regime == "market_bull":
+        return dataframe["market_bull"]
+    if regime == "market_bear":
+        return dataframe["market_bear"]
+    if regime == "market_aligned":
+        return dataframe["market_bull"] if side == "long" else dataframe["market_bear"]
+    if regime == "market_contra":
+        return dataframe["market_bear"] if side == "long" else dataframe["market_bull"]
+    if regime == "market_chop":
+        return dataframe["market_chop"]
+    if regime == "market_high_vol":
+        return dataframe["market_high_vol"]
+    if regime == "market_extreme":
+        return dataframe["market_panic_down"] if side == "long" else dataframe["market_euphoria_up"]
+    raise ValueError(regime)
+
+
+def expand_regimes(candidates: list[Candidate], regimes: list[str]) -> list[Candidate]:
+    expanded = []
+    for candidate in candidates:
+        expanded.extend(replace(candidate, regime=regime) for regime in regimes)
+    return expanded
+
+
+def needs_market_regime(regimes: list[str]) -> bool:
+    return any(regime.startswith("market_") for regime in regimes)
 
 
 def build_candidates(templates: set[str], grid: str) -> list[Candidate]:
@@ -628,25 +934,291 @@ def build_candidates(templates: set[str], grid: str) -> list[Candidate]:
                         },
                     )
                 )
+        if "rsi_reversion" in templates:
+            rsi_grid = {
+                "compact": (
+                    [0.0006, 0.0012],
+                    [0.014, 0.024],
+                    [0.7],
+                    [0.0035],
+                    [0.998],
+                    [8],
+                    [28],
+                    [35],
+                ),
+                "wide": (
+                    [0.0004, 0.0008, 0.0015],
+                    [0.012, 0.020, 0.035],
+                    [0.5, 0.9],
+                    [0.0025, 0.0050],
+                    [0.998, 0.995],
+                    [6, 10, 14],
+                    [25, 35],
+                    [30, 40],
+                ),
+            }[grid]
+            for (
+                atr_floor,
+                atr_ceiling,
+                volume_mult,
+                bb_width,
+                band_pad,
+                rsi_2_long,
+                stoch_low,
+                mfi_low,
+            ) in itertools.product(*rsi_grid):
+                candidates.append(
+                    Candidate(
+                        "rsi_reversion",
+                        side,
+                        {
+                            "atr_floor": atr_floor,
+                            "atr_ceiling": atr_ceiling,
+                            "volume_mult": volume_mult,
+                            "bb_width": bb_width,
+                            "band_pad": band_pad,
+                            "rsi_2_long": rsi_2_long,
+                            "rsi_2_short": 100 - rsi_2_long,
+                            "stoch_low": stoch_low,
+                            "mfi_low": mfi_low,
+                            "macro_limit": 0.045,
+                        },
+                    )
+                )
+        if "stoch_turn" in templates:
+            stoch_grid = {
+                "compact": (
+                    [0.0006, 0.0012],
+                    [0.016, 0.026],
+                    [0.7],
+                    [0.70],
+                    [24],
+                    [-70],
+                    [0.018],
+                ),
+                "wide": (
+                    [0.0004, 0.0008, 0.0015],
+                    [0.014, 0.024, 0.038],
+                    [0.5, 0.9],
+                    [0.55, 0.85],
+                    [20, 30],
+                    [-55, -90],
+                    [0.012, 0.025],
+                ),
+            }[grid]
+            for atr_floor, atr_ceiling, volume_mult, range_mult, turn_level, cci_low, roc_limit in itertools.product(*stoch_grid):
+                candidates.append(
+                    Candidate(
+                        "stoch_turn",
+                        side,
+                        {
+                            "atr_floor": atr_floor,
+                            "atr_ceiling": atr_ceiling,
+                            "volume_mult": volume_mult,
+                            "range_mult": range_mult,
+                            "turn_level": turn_level,
+                            "cci_low": cci_low,
+                            "roc_limit": roc_limit,
+                        },
+                    )
+                )
+        if "range_breakout" in templates:
+            breakout_grid = {
+                "compact": (
+                    [0.0006, 0.0012],
+                    [0.018, 0.030],
+                    [0.3, 0.7],
+                    [0.80],
+                    [0.65],
+                    [0.0002],
+                    [0.0006],
+                ),
+                "wide": (
+                    [0.0004, 0.0008, 0.0015],
+                    [0.018, 0.030, 0.045],
+                    [0.2, 0.6, 1.0],
+                    [0.65, 0.85],
+                    [0.55, 0.85],
+                    [0.0000, 0.0004],
+                    [0.0004, 0.0010],
+                ),
+            }[grid]
+            for atr_floor, atr_ceiling, volume_z, squeeze_mult, range_mult, slope, roc_fast in itertools.product(*breakout_grid):
+                candidates.append(
+                    Candidate(
+                        "range_breakout",
+                        side,
+                        {
+                            "atr_floor": atr_floor,
+                            "atr_ceiling": atr_ceiling,
+                            "volume_z": volume_z,
+                            "squeeze_mult": squeeze_mult,
+                            "range_mult": range_mult,
+                            "slope": slope,
+                            "roc_fast": roc_fast,
+                            "rsi_min": 45,
+                            "rsi_max": 76,
+                        },
+                    )
+                )
+        if "ema_cross_scalp" in templates:
+            ema_grid = {
+                "compact": (
+                    [0.0005, 0.0010],
+                    [0.014, 0.024],
+                    [0.7],
+                    [0.0025],
+                    [0.0020],
+                    [0.0008],
+                    [38],
+                    [72],
+                ),
+                "wide": (
+                    [0.0003, 0.0008, 0.0015],
+                    [0.012, 0.020, 0.034],
+                    [0.5, 0.9],
+                    [0.0015, 0.0040],
+                    [0.0010, 0.0035],
+                    [0.0005, 0.0015],
+                    [34, 42],
+                    [68, 78],
+                ),
+            }[grid]
+            for (
+                atr_floor,
+                atr_ceiling,
+                volume_mult,
+                bb_width,
+                ema_pad,
+                slope_tolerance,
+                rsi_fast_min,
+                rsi_fast_max,
+            ) in itertools.product(*ema_grid):
+                candidates.append(
+                    Candidate(
+                        "ema_cross_scalp",
+                        side,
+                        {
+                            "atr_floor": atr_floor,
+                            "atr_ceiling": atr_ceiling,
+                            "volume_mult": volume_mult,
+                            "bb_width": bb_width,
+                            "ema_pad": ema_pad,
+                            "slope_tolerance": slope_tolerance,
+                            "rsi_fast_min": rsi_fast_min,
+                            "rsi_fast_max": rsi_fast_max,
+                            "roc_limit": 0.045,
+                        },
+                    )
+                )
+        if "panic_snapback" in templates:
+            panic_grid = {
+                "compact": (
+                    [0.0010, 0.0020],
+                    [0.030, 0.055],
+                    [0.8],
+                    [0.85],
+                    [0.0040, 0.0070],
+                    [1.4],
+                    [28],
+                ),
+                "wide": (
+                    [0.0008, 0.0015, 0.0025],
+                    [0.024, 0.045, 0.070],
+                    [0.5, 1.0],
+                    [0.70, 1.00],
+                    [0.0030, 0.0060, 0.0100],
+                    [1.2, 1.8],
+                    [25, 35],
+                ),
+            }[grid]
+            for atr_floor, atr_ceiling, volume_z, range_mult, shock, wick_body, rsi_fast in itertools.product(*panic_grid):
+                candidates.append(
+                    Candidate(
+                        "panic_snapback",
+                        side,
+                        {
+                            "atr_floor": atr_floor,
+                            "atr_ceiling": atr_ceiling,
+                            "volume_z": volume_z,
+                            "range_mult": range_mult,
+                            "shock": shock,
+                            "wick_body": wick_body,
+                            "rsi_fast": rsi_fast,
+                        },
+                    )
+                )
+        if "liquidity_sweep" in templates:
+            sweep_grid = {
+                "compact": (
+                    [0.0008, 0.0015],
+                    [0.020, 0.035],
+                    [0.6],
+                    [0.0040],
+                    [0.60],
+                    [0.0010],
+                    [10],
+                ),
+                "wide": (
+                    [0.0005, 0.0010, 0.0020],
+                    [0.018, 0.030, 0.050],
+                    [0.3, 0.8, 1.2],
+                    [0.0025, 0.0060],
+                    [0.45, 0.80],
+                    [0.0005, 0.0015],
+                    [8, 14],
+                ),
+            }[grid]
+            for atr_floor, atr_ceiling, volume_z, bb_width, wick_atr, vwap_pad, rsi_2 in itertools.product(*sweep_grid):
+                candidates.append(
+                    Candidate(
+                        "liquidity_sweep",
+                        side,
+                        {
+                            "atr_floor": atr_floor,
+                            "atr_ceiling": atr_ceiling,
+                            "volume_z": volume_z,
+                            "bb_width": bb_width,
+                            "wick_atr": wick_atr,
+                            "vwap_pad": vwap_pad,
+                            "rsi_2": rsi_2,
+                            "macro_limit": 0.055,
+                        },
+                    )
+                )
     return candidates
 
 
 def signals_for(candidate: Candidate, dataframe: pd.DataFrame) -> pd.Series:
     if candidate.template == "mean_reversion":
-        return signal_mean_reversion(dataframe, candidate.side, candidate.params)
-    if candidate.template == "breakout":
-        return signal_breakout(dataframe, candidate.side, candidate.params)
-    if candidate.template == "trend_pullback":
-        return signal_trend_pullback(dataframe, candidate.side, candidate.params)
-    if candidate.template == "micro_momentum":
-        return signal_micro_momentum(dataframe, candidate.side, candidate.params)
-    if candidate.template == "vwap_reclaim":
-        return signal_vwap_reclaim(dataframe, candidate.side, candidate.params)
-    if candidate.template == "squeeze_breakout":
-        return signal_squeeze_breakout(dataframe, candidate.side, candidate.params)
-    if candidate.template == "wick_reversal":
-        return signal_wick_reversal(dataframe, candidate.side, candidate.params)
-    raise ValueError(candidate.template)
+        signal = signal_mean_reversion(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "breakout":
+        signal = signal_breakout(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "trend_pullback":
+        signal = signal_trend_pullback(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "micro_momentum":
+        signal = signal_micro_momentum(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "vwap_reclaim":
+        signal = signal_vwap_reclaim(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "squeeze_breakout":
+        signal = signal_squeeze_breakout(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "wick_reversal":
+        signal = signal_wick_reversal(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "rsi_reversion":
+        signal = signal_rsi_reversion(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "stoch_turn":
+        signal = signal_stoch_turn(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "range_breakout":
+        signal = signal_range_breakout(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "ema_cross_scalp":
+        signal = signal_ema_cross_scalp(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "panic_snapback":
+        signal = signal_panic_snapback(dataframe, candidate.side, candidate.params)
+    elif candidate.template == "liquidity_sweep":
+        signal = signal_liquidity_sweep(dataframe, candidate.side, candidate.params)
+    else:
+        raise ValueError(candidate.template)
+    return signal & regime_filter(dataframe, candidate.regime, candidate.side)
 
 
 def simulate(
@@ -954,6 +1526,7 @@ def result_to_row(index: int, result: dict, leverage: float) -> dict:
         "scope": result.get("scope", "portfolio"),
         "template": candidate.template,
         "side": candidate.side,
+        "regime": candidate.regime,
         "hold": result["hold"],
         "leverage": leverage,
         "tp": result["tp"],
@@ -1001,11 +1574,40 @@ def main() -> None:
             "vwap_reclaim",
             "squeeze_breakout",
             "wick_reversal",
+            "rsi_reversion",
+            "stoch_turn",
+            "range_breakout",
+            "ema_cross_scalp",
+            "panic_snapback",
+            "liquidity_sweep",
         ],
     )
     parser.add_argument("--grid", choices=["compact", "wide"], default="compact")
     parser.add_argument("--mode", choices=["portfolio", "per-pair"], default="portfolio")
     parser.add_argument("--exit-mode", choices=["fixed", "bracket"], default="fixed")
+    parser.add_argument(
+        "--load-mode",
+        choices=["auto", "bulk", "stream"],
+        default="auto",
+        help="Use stream for per-pair 1m sweeps to avoid loading every pair at once.",
+    )
+    parser.add_argument(
+        "--regimes",
+        nargs="+",
+        default=["any"],
+        choices=[
+            "any",
+            "local_trend",
+            "local_chop",
+            "market_bull",
+            "market_bear",
+            "market_aligned",
+            "market_contra",
+            "market_chop",
+            "market_high_vol",
+            "market_extreme",
+        ],
+    )
     parser.add_argument("--top", type=int, default=30)
     parser.add_argument("--fee", type=float, default=0.0005)
     parser.add_argument("--leverage", type=float, default=4.0)
@@ -1024,20 +1626,39 @@ def main() -> None:
         "vwap_reclaim",
         "squeeze_breakout",
         "wick_reversal",
+        "rsi_reversion",
+        "stoch_turn",
+        "range_breakout",
+        "ema_cross_scalp",
+        "panic_snapback",
+        "liquidity_sweep",
     }
     templates = available_templates if "all" in args.templates else set(args.templates)
 
     data_dir = Path(args.data_dir)
-    pair_data = {
-        pair: add_base_indicators(apply_timerange(load_pair(data_dir, pair, args.timeframe), args.timerange))
-        for pair in args.pairs
-    }
-
-    candidates = build_candidates(templates, args.grid)
+    candidates = expand_regimes(build_candidates(templates, args.grid), args.regimes)
     results = []
-    for candidate in candidates:
-        if args.mode == "per-pair":
-            for pair, dataframe in pair_data.items():
+    stream_pairs = args.load_mode == "stream" or (
+        args.load_mode == "auto" and args.mode == "per-pair"
+    )
+
+    if stream_pairs:
+        market_dataframe = None
+        if needs_market_regime(args.regimes):
+            market_dataframe = load_prepared_pair(data_dir, "BTC", args.timeframe, args.timerange)
+
+        for pair in args.pairs:
+            dataframe = (
+                market_dataframe.copy()
+                if pair == "BTC" and market_dataframe is not None
+                else load_prepared_pair(data_dir, pair, args.timeframe, args.timerange)
+            )
+            pair_data = {pair: dataframe}
+            if market_dataframe is not None and pair != "BTC":
+                pair_data["BTC"] = market_dataframe
+            attach_market_regime(pair_data)
+
+            for candidate in candidates:
                 signals = signals_for(candidate, dataframe)
                 if int(signals.sum()) < args.min_signals:
                     continue
@@ -1067,40 +1688,80 @@ def main() -> None:
                             )
                             result["scope"] = pair
                             results.append(result)
-            continue
-
-        pair_signals = {
-            pair: signals_for(candidate, dataframe)
-            for pair, dataframe in pair_data.items()
+        pair_data = {}
+    else:
+        pair_data = {
+            pair: load_prepared_pair(data_dir, pair, args.timeframe, args.timerange)
+            for pair in args.pairs
         }
-        if sum(int(signals.sum()) for signals in pair_signals.values()) < args.min_signals:
-            continue
-        for hold in args.holds:
-            if args.exit_mode == "fixed":
-                result = evaluate_candidate_fixed_hold(
-                    pair_data,
-                    candidate,
-                    pair_signals,
-                    hold,
-                    args.fee,
-                    args.leverage,
-                )
-                result["scope"] = "portfolio"
-                results.append(result)
-            else:
-                for tp, sl in itertools.product(args.tps, args.sls):
-                    result = evaluate_candidate_with_signals(
+        attach_market_regime(pair_data)
+
+        for candidate in candidates:
+            if args.mode == "per-pair":
+                for pair, dataframe in pair_data.items():
+                    signals = signals_for(candidate, dataframe)
+                    if int(signals.sum()) < args.min_signals:
+                        continue
+                    for hold in args.holds:
+                        if args.exit_mode == "fixed":
+                            result = evaluate_candidate_fixed_hold(
+                                {pair: dataframe},
+                                candidate,
+                                {pair: signals},
+                                hold,
+                                args.fee,
+                                args.leverage,
+                            )
+                            result["scope"] = pair
+                            results.append(result)
+                        else:
+                            for tp, sl in itertools.product(args.tps, args.sls):
+                                result = evaluate_candidate_with_signals(
+                                    {pair: dataframe},
+                                    candidate,
+                                    {pair: signals},
+                                    hold,
+                                    tp,
+                                    sl,
+                                    args.fee,
+                                    args.leverage,
+                                )
+                                result["scope"] = pair
+                                results.append(result)
+                continue
+
+            pair_signals = {
+                pair: signals_for(candidate, dataframe)
+                for pair, dataframe in pair_data.items()
+            }
+            if sum(int(signals.sum()) for signals in pair_signals.values()) < args.min_signals:
+                continue
+            for hold in args.holds:
+                if args.exit_mode == "fixed":
+                    result = evaluate_candidate_fixed_hold(
                         pair_data,
                         candidate,
                         pair_signals,
                         hold,
-                        tp,
-                        sl,
                         args.fee,
                         args.leverage,
                     )
                     result["scope"] = "portfolio"
                     results.append(result)
+                else:
+                    for tp, sl in itertools.product(args.tps, args.sls):
+                        result = evaluate_candidate_with_signals(
+                            pair_data,
+                            candidate,
+                            pair_signals,
+                            hold,
+                            tp,
+                            sl,
+                            args.fee,
+                            args.leverage,
+                        )
+                        result["scope"] = "portfolio"
+                        results.append(result)
 
     results.sort(key=lambda item: item["total"]["robust_score"], reverse=True)
 
@@ -1113,7 +1774,7 @@ def main() -> None:
 
     print(
         "rank,scope,template,side,hold,lev,trades,tpd,total_profit,daily,min_daily,"
-        "min_tpd,positive_slices,winrate,pf,max_dd,p2024,d2024,p2025,d2025,"
+        "regime,min_tpd,positive_slices,winrate,pf,max_dd,p2024,d2024,p2025,d2025,"
         "p2026,d2026,score,params"
     )
     for row in rows:
@@ -1121,7 +1782,7 @@ def main() -> None:
             f"{row['rank']},{row['scope']},{row['template']},{row['side']},{row['hold']},"
             f"{row['leverage']:.1f},{row['trades']},{row['trades_per_day']:.3f},"
             f"{row['total_profit']:.4f},{row['daily']:.5f},"
-            f"{row['min_slice_daily']:.5f},{row['min_slice_trades_per_day']:.3f},"
+            f"{row['min_slice_daily']:.5f},{row['regime']},{row['min_slice_trades_per_day']:.3f},"
             f"{row['positive_slices']},{row['winrate']:.4f},{row['pf']:.3f},"
             f"{row['max_dd']:.4f},{row['p2024']:.4f},{row['d2024']:.5f},"
             f"{row['p2025']:.4f},{row['d2025']:.5f},"
