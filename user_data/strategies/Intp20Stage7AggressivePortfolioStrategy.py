@@ -894,8 +894,8 @@ class Intp20Stage9PrunedSmokeStrategy(Intp20Stage9AggressiveBlendStrategy):
         28,
     }
 
-    @staticmethod
-    def _build_pair_signals(dataframe: DataFrame, pair: str) -> DataFrame:
+    @classmethod
+    def _build_pair_signals(cls, dataframe: DataFrame, pair: str) -> DataFrame:
         dataframe = dataframe.copy()
         dataframe["stage7_enter_long"] = False
         dataframe["stage7_enter_short"] = False
@@ -906,7 +906,7 @@ class Intp20Stage9PrunedSmokeStrategy(Intp20Stage9AggressiveBlendStrategy):
             Intp20Stage9AggressiveBlendStrategy.stage9_rules,
             start=1,
         ):
-            if index not in Intp20Stage9PrunedSmokeStrategy.included_rule_numbers:
+            if index not in cls.included_rule_numbers:
                 continue
             if base != rule_base:
                 continue
@@ -924,3 +924,28 @@ class Intp20Stage9PrunedSmokeStrategy(Intp20Stage9AggressiveBlendStrategy):
             else:
                 dataframe.loc[mask, ["stage7_enter_short", "stage7_enter_tag"]] = (True, tag)
         return dataframe
+
+
+class Intp20Stage9CrossYearCoreStrategy(Intp20Stage9PrunedSmokeStrategy):
+    """
+    Stage-9C cross-year core.
+
+    Removes the Stage-9B rules that flipped sharply between 2024 and 2025/2026.
+    The aim is to keep enough high-frequency opportunity count while avoiding
+    rules whose apparent edge came from one regime only.
+    """
+
+    included_rule_numbers = {
+        1,
+        2,
+        4,
+        5,
+        7,
+        8,
+        10,
+        11,
+        15,
+        16,
+        24,
+        25,
+    }
