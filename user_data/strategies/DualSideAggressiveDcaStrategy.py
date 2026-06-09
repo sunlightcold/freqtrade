@@ -430,3 +430,134 @@ class Intp20ShortRobustDcaStrategy(Intp20ShortOnlyDcaStrategy):
         "XLM/",
         "XRP/",
     )
+
+
+class Intp20LongMoonshotDcaStrategy(Intp20LongFocusDcaStrategy):
+    """
+    High-risk long-account research profile for aggressive CAGR exploration.
+
+    This intentionally spends more margin and accepts deeper account swings than
+    the robust profile. It is a research candidate, not a default deployment.
+    """
+
+    stoploss = -0.20
+    max_dca_multiplier = 1.6
+    dca_profit_triggers = [-0.024, -0.052, -0.085]
+    dca_multipliers = [0.25, 0.25, 0.10]
+    dca_label = "long_moonshot_dca"
+
+    minimal_roi = {
+        "360": 0.010,
+        "120": 0.018,
+        "45": 0.030,
+        "0": 0.055,
+    }
+
+    trailing_stop_positive = 0.018
+    trailing_stop_positive_offset = 0.060
+
+    @property
+    def protections(self):
+        return [
+            {
+                "method": "CooldownPeriod",
+                "stop_duration_candles": 2,
+            },
+            {
+                "method": "StoplossGuard",
+                "lookback_period_candles": 96,
+                "trade_limit": 5,
+                "stop_duration_candles": 24,
+                "only_per_side": True,
+            },
+            {
+                "method": "MaxDrawdown",
+                "lookback_period_candles": 384,
+                "trade_limit": 30,
+                "stop_duration_candles": 48,
+                "max_allowed_drawdown": 0.45,
+            },
+        ]
+
+    def leverage(
+        self,
+        pair: str,
+        current_time: datetime,
+        current_rate: float,
+        proposed_leverage: float,
+        max_leverage: float,
+        entry_tag: str | None,
+        side: str,
+        **kwargs,
+    ) -> float:
+        if pair.startswith(("DOGE/", "APT/", "AVAX/", "SOL/", "XLM/", "XTZ/")):
+            target = 8.0
+        elif pair.startswith(("LTC/", "ETC/", "MKR/")):
+            target = 7.0
+        else:
+            target = 6.0
+        return min(target, max_leverage, 10.0)
+
+
+class Intp20ShortMoonshotDcaStrategy(Intp20ShortFocusDcaStrategy):
+    """
+    High-risk short-account research profile for aggressive CAGR exploration.
+    """
+
+    stoploss = -0.18
+    max_dca_multiplier = 1.8
+    dca_profit_triggers = [-0.022, -0.050, -0.080]
+    dca_multipliers = [0.30, 0.30, 0.20]
+    dca_label = "short_moonshot_dca"
+
+    minimal_roi = {
+        "360": 0.008,
+        "120": 0.015,
+        "45": 0.026,
+        "0": 0.050,
+    }
+
+    trailing_stop_positive = 0.016
+    trailing_stop_positive_offset = 0.055
+
+    @property
+    def protections(self):
+        return [
+            {
+                "method": "CooldownPeriod",
+                "stop_duration_candles": 2,
+            },
+            {
+                "method": "StoplossGuard",
+                "lookback_period_candles": 96,
+                "trade_limit": 5,
+                "stop_duration_candles": 24,
+                "only_per_side": True,
+            },
+            {
+                "method": "MaxDrawdown",
+                "lookback_period_candles": 384,
+                "trade_limit": 30,
+                "stop_duration_candles": 48,
+                "max_allowed_drawdown": 0.45,
+            },
+        ]
+
+    def leverage(
+        self,
+        pair: str,
+        current_time: datetime,
+        current_rate: float,
+        proposed_leverage: float,
+        max_leverage: float,
+        entry_tag: str | None,
+        side: str,
+        **kwargs,
+    ) -> float:
+        if pair.startswith(("DOGE/", "APT/", "XTZ/")):
+            target = 7.0
+        elif pair.startswith(("BCH/", "XRP/")):
+            target = 6.0
+        else:
+            target = 5.0
+        return min(target, max_leverage, 9.0)
