@@ -864,3 +864,63 @@ class Intp20Stage9AggressiveBlendStrategy(Intp20Stage7AggressivePortfolioStrateg
             else:
                 dataframe.loc[mask, ["stage7_enter_short", "stage7_enter_tag"]] = (True, tag)
         return dataframe
+
+
+class Intp20Stage9PrunedSmokeStrategy(Intp20Stage9AggressiveBlendStrategy):
+    """
+    Stage-9B smoke-pruned blend.
+
+    Keeps only the Stage-9 rules that were positive in the first native smoke
+    window. This is a walk-forward candidate for checking whether the new
+    high-frequency streams survive outside the pruning window.
+    """
+
+    included_rule_numbers = {
+        1,
+        2,
+        4,
+        5,
+        7,
+        8,
+        10,
+        11,
+        12,
+        15,
+        16,
+        18,
+        24,
+        25,
+        26,
+        28,
+    }
+
+    @staticmethod
+    def _build_pair_signals(dataframe: DataFrame, pair: str) -> DataFrame:
+        dataframe = dataframe.copy()
+        dataframe["stage7_enter_long"] = False
+        dataframe["stage7_enter_short"] = False
+        dataframe["stage7_enter_tag"] = None
+        base = pair.split("/")[0]
+
+        for index, (rule_base, template, side, regime, hold, leverage, params) in enumerate(
+            Intp20Stage9AggressiveBlendStrategy.stage9_rules,
+            start=1,
+        ):
+            if index not in Intp20Stage9PrunedSmokeStrategy.included_rule_numbers:
+                continue
+            if base != rule_base:
+                continue
+            mask = Intp20Stage9AggressiveBlendStrategy._signal_for_rule(
+                dataframe,
+                template,
+                side,
+                params,
+            )
+            mask &= Intp20Stage9AggressiveBlendStrategy._regime_filter(dataframe, regime, side)
+            mask &= dataframe["stage7_enter_tag"].isna()
+            tag = Intp20Stage9AggressiveBlendStrategy._tag(index, base, template, side, regime, hold, leverage)
+            if side == "long":
+                dataframe.loc[mask, ["stage7_enter_long", "stage7_enter_tag"]] = (True, tag)
+            else:
+                dataframe.loc[mask, ["stage7_enter_short", "stage7_enter_tag"]] = (True, tag)
+        return dataframe
