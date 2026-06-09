@@ -131,6 +131,10 @@ class Intp20Stage7AggressivePortfolioStrategy(IStrategy):
             (typical_price * dataframe["volume"]).rolling(24).sum()
             / dataframe["volume"].rolling(24).sum()
         )
+        dataframe["vwap_96"] = (
+            (typical_price * dataframe["volume"]).rolling(96).sum()
+            / dataframe["volume"].rolling(96).sum()
+        )
 
         dataframe["local_up"] = (
             (dataframe["close"] > dataframe["ema_50"])
@@ -156,6 +160,15 @@ class Intp20Stage7AggressivePortfolioStrategy(IStrategy):
             (dataframe["close"] < dataframe["ema_200"])
             & (dataframe["ema_50_slope"] < 0)
             & (dataframe["rsi"] < 55)
+        )
+        dataframe["market_high_vol"] = (
+            (dataframe["atr_pct"] > dataframe["atr_pct"].rolling(288).mean() * 1.20)
+            | (dataframe["bb_width"] > dataframe["bb_width_mean_96"] * 1.25)
+        )
+        dataframe["market_chop"] = (
+            ~dataframe["market_bull"]
+            & ~dataframe["market_bear"]
+            & (dataframe["bb_width"] < dataframe["bb_width_mean_96"] * 1.15)
         )
         dataframe["market_panic_down"] = (dataframe["roc_48"] < -0.035) | (
             dataframe["roc_24"] < -0.025
@@ -363,6 +376,8 @@ class Intp20Stage7AggressivePortfolioStrategy(IStrategy):
                 "date",
                 "market_bull",
                 "market_bear",
+                "market_high_vol",
+                "market_chop",
                 "market_panic_down",
                 "market_euphoria_up",
             ]
@@ -370,6 +385,8 @@ class Intp20Stage7AggressivePortfolioStrategy(IStrategy):
             columns={
                 "market_bull": "btc_market_bull",
                 "market_bear": "btc_market_bear",
+                "market_high_vol": "btc_market_high_vol",
+                "market_chop": "btc_market_chop",
                 "market_panic_down": "btc_market_panic_down",
                 "market_euphoria_up": "btc_market_euphoria_up",
             }
@@ -387,6 +404,8 @@ class Intp20Stage7AggressivePortfolioStrategy(IStrategy):
             for column in (
                 "btc_market_bull",
                 "btc_market_bear",
+                "btc_market_high_vol",
+                "btc_market_chop",
                 "btc_market_panic_down",
                 "btc_market_euphoria_up",
             ):
@@ -423,10 +442,18 @@ class Intp20Stage7AggressivePortfolioStrategy(IStrategy):
         **kwargs,
     ) -> str | bool | None:
         trade_minutes = (current_time - trade.open_date_utc).total_seconds() / 60
-        hold_minutes = 60 if trade.enter_tag and "h12" in trade.enter_tag else 120
+        hold_minutes = self._hold_minutes_from_tag(trade.enter_tag)
         if trade_minutes >= hold_minutes:
             return f"{trade.enter_tag}_fixed_hold_exit"
         return None
+
+    @staticmethod
+    def _hold_minutes_from_tag(enter_tag: str | None) -> int:
+        if enter_tag:
+            for token in enter_tag.split("_"):
+                if token.startswith("h") and token[1:].isdigit():
+                    return int(token[1:]) * 5
+        return 120
 
     def leverage(
         self,
@@ -439,6 +466,10 @@ class Intp20Stage7AggressivePortfolioStrategy(IStrategy):
         side: str,
         **kwargs,
     ) -> float:
+        if entry_tag:
+            for token in entry_tag.split("_"):
+                if token.startswith("l") and token[1:].isdigit():
+                    return min(float(token[1:]), max_leverage)
         return min(5.0, max_leverage)
 
 
@@ -519,4 +550,317 @@ class Intp20Stage8LeaderCoreStrategy(Intp20Stage8NoSuiCoreStrategy):
         keep = dataframe["stage7_enter_tag"].isin(Intp20Stage8LeaderCoreStrategy.included_tags)
         dataframe.loc[~keep, ["stage7_enter_long", "stage7_enter_short"]] = False
         dataframe.loc[~keep, "stage7_enter_tag"] = None
+        return dataframe
+
+
+class Intp20Stage9AggressiveBlendStrategy(Intp20Stage7AggressivePortfolioStrategy):
+    """
+    Stage-9 aggressive blend translated from the coarse greedy portfolio.
+
+    This class keeps the Stage-7/8 native validation baseline intact and adds
+    the higher-frequency micro-momentum and VWAP-reclaim templates found by the
+    Stage-9 coarse search. It is intentionally a validation candidate, not an
+    assumed production strategy.
+    """
+
+    stage9_rules = [
+        ("AAVE", "panic_snapback", "long", "market_contra", 24, 4.0, {"atr_ceiling": 0.055, "atr_floor": 0.002, "range_mult": 0.85, "rsi_fast": 28, "shock": 0.007, "volume_z": 0.8, "wick_body": 1.4}),
+        ("SOL", "panic_snapback", "short", "market_contra", 24, 4.0, {"atr_ceiling": 0.055, "atr_floor": 0.001, "range_mult": 0.85, "rsi_fast": 28, "shock": 0.004, "volume_z": 0.8, "wick_body": 1.4}),
+        ("SUI", "rsi_reversion", "short", "local_chop", 24, 4.0, {"atr_ceiling": 0.014, "atr_floor": 0.0012, "band_pad": 0.998, "bb_width": 0.0035, "macro_limit": 0.045, "mfi_low": 35, "rsi_2_long": 8, "rsi_2_short": 92, "stoch_low": 28, "volume_mult": 0.7}),
+        ("XLM", "panic_snapback", "long", "market_contra", 12, 4.0, {"atr_ceiling": 0.055, "atr_floor": 0.001, "range_mult": 0.85, "rsi_fast": 28, "shock": 0.007, "volume_z": 0.8, "wick_body": 1.4}),
+        ("COMP", "rsi_reversion", "long", "market_extreme", 24, 4.0, {"atr_ceiling": 0.024, "atr_floor": 0.0006, "band_pad": 0.998, "bb_width": 0.0035, "macro_limit": 0.045, "mfi_low": 35, "rsi_2_long": 8, "rsi_2_short": 92, "stoch_low": 28, "volume_mult": 0.7}),
+        ("XTZ", "panic_snapback", "long", "market_contra", 24, 4.0, {"atr_ceiling": 0.055, "atr_floor": 0.001, "range_mult": 0.85, "rsi_fast": 28, "shock": 0.004, "volume_z": 0.8, "wick_body": 1.4}),
+        ("MKR", "range_breakout", "short", "market_contra", 24, 4.0, {"atr_ceiling": 0.018, "atr_floor": 0.0006, "range_mult": 0.65, "roc_fast": 0.0006, "rsi_max": 76, "rsi_min": 45, "slope": 0.0002, "squeeze_mult": 0.8, "volume_z": 0.7}),
+        ("XTZ", "rsi_reversion", "short", "local_chop", 24, 4.0, {"atr_ceiling": 0.024, "atr_floor": 0.0012, "band_pad": 0.998, "bb_width": 0.0035, "macro_limit": 0.045, "mfi_low": 35, "rsi_2_long": 8, "rsi_2_short": 92, "stoch_low": 28, "volume_mult": 0.7}),
+        ("LINK", "panic_snapback", "long", "market_contra", 24, 4.0, {"atr_ceiling": 0.03, "atr_floor": 0.001, "range_mult": 0.85, "rsi_fast": 28, "shock": 0.007, "volume_z": 0.8, "wick_body": 1.4}),
+        ("XRP", "rsi_reversion", "short", "market_extreme", 24, 4.0, {"atr_ceiling": 0.024, "atr_floor": 0.0012, "band_pad": 0.998, "bb_width": 0.0035, "macro_limit": 0.045, "mfi_low": 35, "rsi_2_long": 8, "rsi_2_short": 92, "stoch_low": 28, "volume_mult": 0.7}),
+        ("MKR", "micro_momentum", "long", "market_chop", 18, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0025, "roc_fast": 0.0015, "roc_slow": 0.002, "rsi_cap": 74, "rsi_fast": 58, "slope": 0.0004, "volume_mult": 1.0, "volume_z": 0.4, "width_mult": 0.9}),
+        ("ETC", "micro_momentum", "long", "market_contra", 18, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0015, "roc_fast": 0.0015, "roc_slow": 0.002, "rsi_cap": 74, "rsi_fast": 58, "slope": 0.0004, "volume_mult": 1.0, "volume_z": 0.4, "width_mult": 0.9}),
+        ("BCH", "vwap_reclaim", "long", "market_contra", 18, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0025, "macro_pullback": 0.045, "range_mult": 0.8, "rsi_reset": 38, "volume_mult": 1.0, "vwap_pad": 0.0008}),
+        ("SUI", "rsi_reversion", "short", "market_aligned", 24, 4.0, {"atr_ceiling": 0.014, "atr_floor": 0.0006, "band_pad": 0.998, "bb_width": 0.0035, "macro_limit": 0.045, "mfi_low": 35, "rsi_2_long": 8, "rsi_2_short": 92, "stoch_low": 28, "volume_mult": 0.7}),
+        ("ETH", "micro_momentum", "long", "market_contra", 18, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0015, "roc_fast": 0.0015, "roc_slow": 0.002, "rsi_cap": 74, "rsi_fast": 58, "slope": 0.0004, "volume_mult": 1.0, "volume_z": 0.4, "width_mult": 0.9}),
+        ("LTC", "vwap_reclaim", "short", "local_chop", 18, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0015, "macro_pullback": 0.045, "range_mult": 0.8, "rsi_reset": 38, "volume_mult": 1.0, "vwap_pad": 0.0008}),
+        ("MKR", "stoch_turn", "short", "local_trend", 24, 4.0, {"atr_ceiling": 0.026, "atr_floor": 0.0006, "cci_low": -70, "range_mult": 0.7, "roc_limit": 0.018, "turn_level": 24, "volume_mult": 0.7}),
+        ("AVAX", "micro_momentum", "short", "market_contra", 20, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0025, "roc_fast": 0.0015, "roc_slow": 0.002, "rsi_cap": 74, "rsi_fast": 58, "slope": 0.0004, "volume_mult": 1.0, "volume_z": 0.4, "width_mult": 0.9}),
+        ("SOL", "vwap_reclaim", "short", "market_contra", 30, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0025, "macro_pullback": 0.045, "range_mult": 0.8, "rsi_reset": 38, "volume_mult": 1.0, "vwap_pad": 0.0008}),
+        ("XTZ", "rsi_reversion", "long", "local_chop", 24, 4.0, {"atr_ceiling": 0.014, "atr_floor": 0.0012, "band_pad": 0.998, "bb_width": 0.0035, "macro_limit": 0.045, "mfi_low": 35, "rsi_2_long": 8, "rsi_2_short": 92, "stoch_low": 28, "volume_mult": 0.7}),
+        ("SOL", "vwap_reclaim", "short", "market_high_vol", 18, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0015, "macro_pullback": 0.045, "range_mult": 0.8, "rsi_reset": 38, "volume_mult": 1.0, "vwap_pad": 0.0008}),
+        ("OP", "vwap_reclaim", "short", "local_chop", 12, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0025, "macro_pullback": 0.045, "range_mult": 0.8, "rsi_reset": 38, "volume_mult": 1.0, "vwap_pad": 0.0008}),
+        ("LTC", "stoch_turn", "short", "market_contra", 24, 4.0, {"atr_ceiling": 0.026, "atr_floor": 0.0012, "cci_low": -70, "range_mult": 0.7, "roc_limit": 0.018, "turn_level": 24, "volume_mult": 0.7}),
+        ("MKR", "vwap_reclaim", "short", "market_chop", 12, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0015, "macro_pullback": 0.045, "range_mult": 0.8, "rsi_reset": 38, "volume_mult": 1.0, "vwap_pad": 0.0008}),
+        ("SUI", "vwap_reclaim", "long", "local_chop", 18, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0015, "macro_pullback": 0.045, "range_mult": 0.8, "rsi_reset": 38, "volume_mult": 1.0, "vwap_pad": 0.0008}),
+        ("BNB", "micro_momentum", "short", "market_chop", 30, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0025, "roc_fast": 0.0015, "roc_slow": 0.002, "rsi_cap": 74, "rsi_fast": 58, "slope": 0.0004, "volume_mult": 1.0, "volume_z": 0.4, "width_mult": 0.9}),
+        ("ETC", "vwap_reclaim", "short", "market_chop", 12, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0025, "macro_pullback": 0.045, "range_mult": 0.8, "rsi_reset": 38, "volume_mult": 1.0, "vwap_pad": 0.0008}),
+        ("APT", "vwap_reclaim", "long", "market_chop", 30, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0025, "macro_pullback": 0.045, "range_mult": 0.8, "rsi_reset": 38, "volume_mult": 1.0, "vwap_pad": 0.0008}),
+        ("LTC", "vwap_reclaim", "short", "market_chop", 18, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0025, "macro_pullback": 0.045, "range_mult": 0.8, "rsi_reset": 38, "volume_mult": 1.0, "vwap_pad": 0.0008}),
+        ("TRX", "vwap_reclaim", "short", "market_contra", 12, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0015, "macro_pullback": 0.045, "range_mult": 0.8, "rsi_reset": 38, "volume_mult": 1.0, "vwap_pad": 0.0008}),
+    ]
+
+    @staticmethod
+    def _micro_momentum(dataframe: DataFrame, side: str, params: dict) -> DataFrame:
+        risk_ok = (
+            (dataframe["atr_pct"] > params["atr_floor"])
+            & (dataframe["atr_pct"] < params["atr_ceiling"])
+            & (dataframe["volume"] > dataframe["volume_mean_48"] * params["volume_mult"])
+            & (dataframe["volume_z"] > params["volume_z"])
+            & (dataframe["bb_width"] > dataframe["bb_width_mean_96"] * params["width_mult"])
+        )
+        if side == "long":
+            return (
+                risk_ok
+                & (dataframe["ema_8"] > dataframe["ema_20"])
+                & (dataframe["ema_20"] > dataframe["ema_50"])
+                & (dataframe["ema_20_slope"] > params["slope"])
+                & (dataframe["close"] > dataframe["don_high_12"])
+                & (dataframe["roc_3"] > params["roc_fast"])
+                & (dataframe["roc_12"] > params["roc_slow"])
+                & (dataframe["rsi_fast"] > params["rsi_fast"])
+                & (dataframe["rsi"] < params["rsi_cap"])
+            )
+        return (
+            risk_ok
+            & (dataframe["ema_8"] < dataframe["ema_20"])
+            & (dataframe["ema_20"] < dataframe["ema_50"])
+            & (dataframe["ema_20_slope"] < -params["slope"])
+            & (dataframe["close"] < dataframe["don_low_12"])
+            & (dataframe["roc_3"] < -params["roc_fast"])
+            & (dataframe["roc_12"] < -params["roc_slow"])
+            & (dataframe["rsi_fast"] < 100 - params["rsi_fast"])
+            & (dataframe["rsi"] > 100 - params["rsi_cap"])
+        )
+
+    @staticmethod
+    def _vwap_reclaim(dataframe: DataFrame, side: str, params: dict) -> DataFrame:
+        crossed_above_vwap = (dataframe["close"] > dataframe["vwap_96"]) & (
+            dataframe["close"].shift(1) <= dataframe["vwap_96"].shift(1)
+        )
+        crossed_below_vwap = (dataframe["close"] < dataframe["vwap_96"]) & (
+            dataframe["close"].shift(1) >= dataframe["vwap_96"].shift(1)
+        )
+        risk_ok = (
+            (dataframe["atr_pct"] > params["atr_floor"])
+            & (dataframe["atr_pct"] < params["atr_ceiling"])
+            & (dataframe["volume"] > dataframe["volume_mean_96"] * params["volume_mult"])
+            & (dataframe["range_pct"] > dataframe["atr_pct"] * params["range_mult"])
+        )
+        if side == "long":
+            return (
+                risk_ok
+                & (dataframe["ema_20"] > dataframe["ema_50"])
+                & (dataframe["roc_24"] > -params["macro_pullback"])
+                & (dataframe["low"] < dataframe["vwap_96"] * (1 - params["vwap_pad"]))
+                & crossed_above_vwap
+                & (dataframe["rsi_fast"] > dataframe["rsi_fast"].shift(1))
+                & (dataframe["rsi_fast"].shift(1) < params["rsi_reset"])
+            )
+        return (
+            risk_ok
+            & (dataframe["ema_20"] < dataframe["ema_50"])
+            & (dataframe["roc_24"] < params["macro_pullback"])
+            & (dataframe["high"] > dataframe["vwap_96"] * (1 + params["vwap_pad"]))
+            & crossed_below_vwap
+            & (dataframe["rsi_fast"] < dataframe["rsi_fast"].shift(1))
+            & (dataframe["rsi_fast"].shift(1) > 100 - params["rsi_reset"])
+        )
+
+    @staticmethod
+    def _rsi_reversion(dataframe: DataFrame, side: str, params: dict) -> DataFrame:
+        risk_ok = (
+            (dataframe["atr_pct"] > params["atr_floor"])
+            & (dataframe["atr_pct"] < params["atr_ceiling"])
+            & (dataframe["volume"] > dataframe["volume_mean_48"] * params["volume_mult"])
+            & (dataframe["bb_width"] > params["bb_width"])
+        )
+        if side == "long":
+            return (
+                risk_ok
+                & (dataframe["low"] < dataframe["bb_low"] * params["band_pad"])
+                & (dataframe["rsi_2"] < params["rsi_2_long"])
+                & (dataframe["stoch_k"] < params["stoch_low"])
+                & (dataframe["mfi"] < params["mfi_low"])
+                & (dataframe["roc_12"] > -params["macro_limit"])
+                & (dataframe["close"] > dataframe["low"] + (dataframe["high"] - dataframe["low"]) * 0.35)
+            )
+        return (
+            risk_ok
+            & (dataframe["high"] > dataframe["bb_high"] / params["band_pad"])
+            & (dataframe["rsi_2"] > params["rsi_2_short"])
+            & (dataframe["stoch_k"] > 100 - params["stoch_low"])
+            & (dataframe["mfi"] > 100 - params["mfi_low"])
+            & (dataframe["roc_12"] < params["macro_limit"])
+            & (dataframe["close"] < dataframe["high"] - (dataframe["high"] - dataframe["low"]) * 0.35)
+        )
+
+    @staticmethod
+    def _stoch_turn(dataframe: DataFrame, side: str, params: dict) -> DataFrame:
+        crossed_up = (dataframe["stoch_k"] > dataframe["stoch_d"]) & (
+            dataframe["stoch_k"].shift(1) <= dataframe["stoch_d"].shift(1)
+        )
+        crossed_down = (dataframe["stoch_k"] < dataframe["stoch_d"]) & (
+            dataframe["stoch_k"].shift(1) >= dataframe["stoch_d"].shift(1)
+        )
+        risk_ok = (
+            (dataframe["atr_pct"] > params["atr_floor"])
+            & (dataframe["atr_pct"] < params["atr_ceiling"])
+            & (dataframe["volume"] > dataframe["volume_mean_48"] * params["volume_mult"])
+            & (dataframe["range_pct"] > dataframe["atr_pct"] * params["range_mult"])
+        )
+        if side == "long":
+            return (
+                risk_ok
+                & (dataframe["local_up"] | dataframe["local_chop"])
+                & crossed_up
+                & (dataframe["stoch_k"].shift(1) < params["turn_level"])
+                & (dataframe["rsi_fast"] > dataframe["rsi_fast"].shift(1))
+                & (dataframe["cci"] < params["cci_low"])
+                & (dataframe["roc_6"] > -params["roc_limit"])
+            )
+        return (
+            risk_ok
+            & (dataframe["local_down"] | dataframe["local_chop"])
+            & crossed_down
+            & (dataframe["stoch_k"].shift(1) > 100 - params["turn_level"])
+            & (dataframe["rsi_fast"] < dataframe["rsi_fast"].shift(1))
+            & (dataframe["cci"] > -params["cci_low"])
+            & (dataframe["roc_6"] < params["roc_limit"])
+        )
+
+    @staticmethod
+    def _range_breakout(dataframe: DataFrame, side: str, params: dict) -> DataFrame:
+        squeezed = dataframe["bb_width"].shift(1) < dataframe["bb_width_mean_96"].shift(1) * params["squeeze_mult"]
+        risk_ok = (
+            (dataframe["atr_pct"] > params["atr_floor"])
+            & (dataframe["atr_pct"] < params["atr_ceiling"])
+            & (dataframe["volume_z"] > params["volume_z"])
+            & (dataframe["range_pct"] > dataframe["atr_pct"] * params["range_mult"])
+            & squeezed
+        )
+        if side == "long":
+            return (
+                risk_ok
+                & (dataframe["close"] > dataframe["don_high_24"])
+                & (dataframe["close"] > dataframe["vwap_24"])
+                & (dataframe["ema_8_slope"] > params["slope"])
+                & (dataframe["roc_3"] > params["roc_fast"])
+                & (dataframe["rsi"] > params["rsi_min"])
+                & (dataframe["rsi"] < params["rsi_max"])
+            )
+        return (
+            risk_ok
+            & (dataframe["close"] < dataframe["don_low_24"])
+            & (dataframe["close"] < dataframe["vwap_24"])
+            & (dataframe["ema_8_slope"] < -params["slope"])
+            & (dataframe["roc_3"] < -params["roc_fast"])
+            & (dataframe["rsi"] < 100 - params["rsi_min"])
+            & (dataframe["rsi"] > 100 - params["rsi_max"])
+        )
+
+    @staticmethod
+    def _panic_snapback(dataframe: DataFrame, side: str, params: dict) -> DataFrame:
+        risk_ok = (
+            (dataframe["atr_pct"] > params["atr_floor"])
+            & (dataframe["atr_pct"] < params["atr_ceiling"])
+            & (dataframe["volume_z"] > params["volume_z"])
+            & (dataframe["range_pct"] > dataframe["atr_pct"] * params["range_mult"])
+        )
+        if side == "long":
+            return (
+                risk_ok
+                & (dataframe["roc_3"] < -params["shock"])
+                & (dataframe["low"] < dataframe["don_low_12"])
+                & (dataframe["lower_wick_pct"] > dataframe["body_pct"] * params["wick_body"])
+                & (dataframe["close"] > dataframe["open"])
+                & (dataframe["rsi_fast"] < params["rsi_fast"])
+            )
+        return (
+            risk_ok
+            & (dataframe["roc_3"] > params["shock"])
+            & (dataframe["high"] > dataframe["don_high_12"])
+            & (dataframe["upper_wick_pct"] > dataframe["body_pct"] * params["wick_body"])
+            & (dataframe["close"] < dataframe["open"])
+            & (dataframe["rsi_fast"] > 100 - params["rsi_fast"])
+        )
+
+    @staticmethod
+    def _regime_filter(dataframe: DataFrame, regime: str, side: str) -> DataFrame:
+        if regime == "local_trend":
+            return dataframe["local_up"] if side == "long" else dataframe["local_down"]
+        if regime == "local_chop":
+            return dataframe["local_chop"]
+        if regime == "market_aligned":
+            return dataframe["btc_market_bull"] if side == "long" else dataframe["btc_market_bear"]
+        if regime == "market_contra":
+            return dataframe["btc_market_bear"] if side == "long" else dataframe["btc_market_bull"]
+        if regime == "market_chop":
+            return dataframe["btc_market_chop"]
+        if regime == "market_high_vol":
+            return dataframe["btc_market_high_vol"]
+        if regime == "market_extreme":
+            return dataframe["btc_market_panic_down"] if side == "long" else dataframe["btc_market_euphoria_up"]
+        raise ValueError(f"Unsupported Stage-9 regime: {regime}")
+
+    @staticmethod
+    def _signal_for_rule(dataframe: DataFrame, template: str, side: str, params: dict) -> DataFrame:
+        if template == "micro_momentum":
+            return Intp20Stage9AggressiveBlendStrategy._micro_momentum(dataframe, side, params)
+        if template == "vwap_reclaim":
+            return Intp20Stage9AggressiveBlendStrategy._vwap_reclaim(dataframe, side, params)
+        if template == "rsi_reversion":
+            return Intp20Stage9AggressiveBlendStrategy._rsi_reversion(dataframe, side, params)
+        if template == "stoch_turn":
+            return Intp20Stage9AggressiveBlendStrategy._stoch_turn(dataframe, side, params)
+        if template == "range_breakout":
+            return Intp20Stage9AggressiveBlendStrategy._range_breakout(dataframe, side, params)
+        if template == "panic_snapback":
+            return Intp20Stage9AggressiveBlendStrategy._panic_snapback(dataframe, side, params)
+        raise ValueError(f"Unsupported Stage-9 template: {template}")
+
+    @staticmethod
+    def _tag(index: int, base: str, template: str, side: str, regime: str, hold: int, leverage: float) -> str:
+        template_alias = {
+            "micro_momentum": "micro",
+            "vwap_reclaim": "vwap",
+            "rsi_reversion": "rsi",
+            "stoch_turn": "stoch",
+            "range_breakout": "range",
+            "panic_snapback": "panic",
+        }[template]
+        regime_alias = {
+            "local_trend": "lt",
+            "local_chop": "lc",
+            "market_aligned": "ma",
+            "market_contra": "mc",
+            "market_chop": "mchop",
+            "market_high_vol": "mhv",
+            "market_extreme": "mx",
+        }[regime]
+        return f"s9_{index:02d}_{base.lower()}_{template_alias}_{side[0]}_{regime_alias}_h{hold}_l{int(leverage)}"
+
+    @staticmethod
+    def _build_pair_signals(dataframe: DataFrame, pair: str) -> DataFrame:
+        dataframe = dataframe.copy()
+        dataframe["stage7_enter_long"] = False
+        dataframe["stage7_enter_short"] = False
+        dataframe["stage7_enter_tag"] = None
+        base = pair.split("/")[0]
+
+        for index, (rule_base, template, side, regime, hold, leverage, params) in enumerate(
+            Intp20Stage9AggressiveBlendStrategy.stage9_rules,
+            start=1,
+        ):
+            if base != rule_base:
+                continue
+            mask = Intp20Stage9AggressiveBlendStrategy._signal_for_rule(
+                dataframe,
+                template,
+                side,
+                params,
+            )
+            mask &= Intp20Stage9AggressiveBlendStrategy._regime_filter(dataframe, regime, side)
+            mask &= dataframe["stage7_enter_tag"].isna()
+            tag = Intp20Stage9AggressiveBlendStrategy._tag(index, base, template, side, regime, hold, leverage)
+            if side == "long":
+                dataframe.loc[mask, ["stage7_enter_long", "stage7_enter_tag"]] = (True, tag)
+            else:
+                dataframe.loc[mask, ["stage7_enter_short", "stage7_enter_tag"]] = (True, tag)
         return dataframe
