@@ -10,6 +10,7 @@ with native Freqtrade backtests before being treated as usable.
 from __future__ import annotations
 
 import argparse
+import hashlib
 from pathlib import Path
 
 import pandas as pd
@@ -109,6 +110,10 @@ def candidate_key(row: pd.Series) -> str:
             "params",
         )
     )
+
+
+def short_digest(raw: str) -> str:
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:10]
 
 
 def read_candidate_files(paths: list[str], limit_per_file: int, sort_by: str) -> pd.DataFrame:
@@ -220,7 +225,7 @@ def build_candidate_trades(
 
     label = (
         f"{timeframe}:{pair}:{candidate.template}:{candidate.side}:"
-        f"{candidate.regime}:h{hold}:tp{tp}:sl{sl}"
+        f"{candidate.regime}:h{hold}:tp{tp}:sl{sl}:{short_digest(row['candidate_key'])}"
     )
     trades = trades.copy()
     trades["raw_profit"] = trades["profit"]
@@ -233,6 +238,7 @@ def build_candidate_trades(
     trades["hold"] = hold
     trades["tp"] = tp
     trades["sl"] = sl
+    trades["candidate_key"] = row["candidate_key"]
     return trades
 
 
@@ -253,6 +259,40 @@ def pair_limit_ok(row: pd.Series, selected: pd.DataFrame, args: argparse.Namespa
     same_pair_side = same_pair & (selected["side"] == row["side"])
     if args.max_per_pair_side > 0 and int(same_pair_side.sum()) >= args.max_per_pair_side:
         return False
+    return True
+
+
+def date_set(trades: pd.DataFrame) -> set[int]:
+    if trades.empty:
+        return set()
+    return set(pd.to_datetime(trades["date"], utc=True).astype("int64"))
+
+
+def overlap_ok(row: pd.Series, trades: pd.DataFrame, selected_trades: pd.DataFrame, args: argparse.Namespace) -> bool:
+    if selected_trades.empty or trades.empty:
+        return True
+
+    comparable = selected_trades[selected_trades["pair"] == row["scope"]]
+    if args.overlap_scope == "pair_side":
+        comparable = comparable[comparable["side"] == row["side"]]
+    if args.overlap_scope == "pair_side_template":
+        comparable = comparable[
+            (comparable["side"] == row["side"])
+            & (comparable["template"] == row["template"])
+        ]
+    if comparable.empty:
+        return True
+
+    current_dates = date_set(trades)
+    if not current_dates:
+        return True
+    for _, selected_group in comparable.groupby("candidate_key"):
+        selected_dates = date_set(selected_group)
+        if not selected_dates:
+            continue
+        overlap = len(current_dates & selected_dates) / min(len(current_dates), len(selected_dates))
+        if overlap > args.max_trade_overlap:
+            return False
     return True
 
 
@@ -280,6 +320,8 @@ def greedy_select(candidates: pd.DataFrame, trades_by_key: dict[str, pd.DataFram
 
             trades = trades_by_key.get(key, pd.DataFrame())
             if trades.empty:
+                continue
+            if not overlap_ok(row, trades, selected_trades, args):
                 continue
             combined = add_trades(selected_trades, trades)
             candidate_score, candidate_slices = portfolio_scores(combined)
@@ -347,6 +389,12 @@ def main() -> None:
     parser.add_argument("--max-candidates", type=int, default=20)
     parser.add_argument("--max-per-pair", type=int, default=3)
     parser.add_argument("--max-per-pair-side", type=int, default=2)
+    parser.add_argument(
+        "--overlap-scope",
+        choices=["pair", "pair_side", "pair_side_template"],
+        default="pair_side_template",
+    )
+    parser.add_argument("--max-trade-overlap", type=float, default=0.80)
     parser.add_argument("--min-positive-slices", type=int, default=2)
     parser.add_argument("--min-candidate-daily", type=float, default=-0.001)
     parser.add_argument("--min-candidate-slice-daily", type=float, default=-0.002)
