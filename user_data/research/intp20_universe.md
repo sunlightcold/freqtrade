@@ -129,3 +129,49 @@ Interpretation:
   as a small hedge candidate until live/dry-run evidence improves.
 - The earlier focus pools are higher-return in-sample candidates, but the robust
   pools are the cleaner anti-overfit candidates.
+
+## 2026-06-09 Moonshot CAGR Study
+
+The 200% CAGR target was tested as a high-risk research objective, not as a
+deployable promise. The useful retained candidates are:
+
+| Slice | Strategy | Full return | CAGR | Max drawdown | Profit factor |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Long moonshot | `Intp20LongMoonshotDcaStrategy` | 205.58% | 45.36% | 24.27% | 1.66 |
+| Short moonshot | `Intp20ShortMoonshotDcaStrategy` | 81.60% | 22.11% | 16.59% | 1.83 |
+
+Walk-forward check for the long moonshot profile:
+
+| Window | Return | CAGR | Max drawdown | Trades | Profit factor |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2023-06-02..2024-12-31 | 119.39% | 64.81% | 24.05% | 162 | 1.61 |
+| 2025-01-01..2025-12-31 | 38.62% | 38.74% | 15.75% | 79 | 1.33 |
+| 2026-01-01..2026-05-31 | 34.96% | 107.41% | 0.00% | 20 | 0.00 |
+
+Walk-forward check for the short moonshot profile:
+
+| Window | Return | CAGR | Max drawdown | Trades | Profit factor |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2023-06-02..2024-12-31 | 27.14% | 16.50% | 16.59% | 45 | 1.58 |
+| 2025-01-01..2025-12-31 | 22.33% | 22.39% | 14.50% | 45 | 1.44 |
+| 2026-01-01..2026-05-31 | 18.65% | 51.60% | 0.00% | 11 | 0.00 |
+
+Rejected experiments:
+
+- `stake_amount=unlimited` with the DCA moonshot profile reduced effective
+  average stake and produced only 24.12% full-period return.
+- Full-wallet compounding at up to 20x leverage produced only 9.22% full-period
+  return with 91.80% max drawdown.
+- Using `1m` as the main timeframe on the best high-beta pairs lost 99.42% with
+  99.57% max drawdown.
+- Adding 15m momentum-continuation entries lost 29.51% and failed in the first
+  month of the study.
+- Raising fixed `stake_amount` above the wallet is rejected by Freqtrade; using
+  the legal 10000 USDT maximum left too little available margin after early
+  losses and finished at -7.80%.
+
+Conclusion: the best reproducible moonshot candidate did not reach 200% CAGR.
+The long moonshot profile is a higher-return, higher-drawdown research variant,
+but the tested path to 200% CAGR required either near-account-death drawdowns or
+failed outright. Treat 200% CAGR as an unproven target that needs a materially
+different signal engine, not just more leverage.
