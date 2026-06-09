@@ -396,3 +396,52 @@ daily. Increasing exposure scales returns and drawdowns roughly linearly; it
 does not solve the opportunity-count problem. The next search must add new
 high-frequency streams, especially entries that trade during 2025-H2 without
 deepening the June/October loss clusters.
+
+## Stage 9: Aggressive Blend And Cross-Year Pruning
+
+Stage 9 added a broader 1m-driven rule set that still validates through native
+Freqtrade on the 1m dataset while internally resampling signals to 5m. The new
+streams were inspired by common open-source Freqtrade patterns such as RSI/BB
+snapbacks, VWAP reclaims, micro momentum, stochastic turns, and squeeze/range
+breakouts, but every candidate below was rebuilt and checked against the local
+20-pair futures dataset.
+
+Native smoke validation at `stake=2500`, `max-open-trades=4`,
+`2025-01-01..2025-03-01`:
+
+| Strategy | Profit | Trades | Max DD | Decision |
+| --- | ---: | ---: | ---: | --- |
+| Aggressive blend | +29.50% | 240 | 27.50% | Too noisy |
+| Smoke-pruned blend | +73.03% | 131 | 5.52% | Good smoke, needs walk-forward |
+
+Walk-forward native validation for the smoke-pruned blend:
+
+| Window | Profit | Trades | Max DD | Approx Daily | Decision |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 2024 | +109.71% | 818 | 26.46% | 0.202% | Positive, higher DD |
+| 2025 | +179.94% | 701 | 8.64% | 0.282% | Strong, still below target |
+| 2026-01-01..2026-05-31 | +28.25% | 175 | 5.77% | 0.166% | Opportunity shortage |
+
+`Intp20Stage9CrossYearCoreStrategy` then removed rules that flipped sharply
+between years. Native validation at `stake=2500`, `max-open-trades=4`:
+
+| Window | Profit | Trades | Max DD | Approx Daily | Decision |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 2024 | +147.37% | 673 | 16.96% | 0.250% | Better risk-adjusted |
+| 2025 | +134.64% | 583 | 11.64% | 0.234% | Lower than pruned blend |
+| 2026-01-01..2026-05-31 | +25.87% | 137 | 5.66% | 0.153% | Still too sparse |
+
+Capacity check for the cross-year core at `stake=3000`, `max-open-trades=6`:
+
+| Window | Profit | Trades | Max DD | Approx Daily |
+| --- | ---: | ---: | ---: | ---: |
+| 2024 | +176.85% | 673 | 18.89% | 0.281% |
+| 2025 | +161.56% | 583 | 12.47% | 0.264% |
+| 2026-01-01..2026-05-31 | +31.04% | 137 | 6.47% | 0.180% |
+
+Stage 9 is the strongest native family so far on risk-adjusted return, but it
+still does not reach the requested `0.5%` daily target or `200%+` annualized
+threshold across all validation slices. Larger stake helps but does not fix the
+main bottleneck: Stage 9 does not create enough robust trades in 2026. The next
+stage must add genuinely new high-frequency opportunity sources rather than
+only pruning or scaling the same rules.
