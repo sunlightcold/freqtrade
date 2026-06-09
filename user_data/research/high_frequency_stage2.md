@@ -79,3 +79,79 @@ Next useful stage:
    protections after losses.
 3. Search exits first: the recurring failure is stoploss clustering, not lack
    of entry frequency.
+
+## Stage 3: Fast Screener Expansion
+
+The local screener was expanded with additional templates and stricter ranking:
+
+- `micro_momentum`
+- `vwap_reclaim`
+- `squeeze_breakout`
+- `wick_reversal`
+- compact/wide grid modes
+- per-pair ranking
+- leverage-adjusted scoring
+- trade-frequency and walk-forward slice metrics
+
+Generated CSV snapshots:
+
+- `user_data/research/stage3_fast_5m_compact.csv`
+- `user_data/research/stage3_fast_15m_compact.csv`
+- `user_data/research/stage3_per_pair_5m_compact.csv`
+- `user_data/research/stage3_per_pair_15m_compact.csv`
+
+### Fast Screener Findings
+
+The 5m portfolio search failed hard when traded as a 20-pair basket. The best
+rows were still effectively account-ruin candidates after leverage adjustment.
+
+The 15m per-pair screen produced a few candidates that were positive in 2024,
+2025, and 2026 slices, but none reached the requested 0.5% daily target.
+
+Best coarse candidates:
+
+| Scope | Template | Side | Hold | Coarse Daily | Notes |
+| --- | --- | --- | ---: | ---: | --- |
+| DOGE | mean reversion | long | 24 candles | 0.227% | Too low-frequency |
+| ETH | squeeze breakout | short | 24 candles | 0.112% | Large drawdown in coarse model |
+| ETC | breakout | short | 24 candles | 0.101% | Candidate for native validation |
+| OP | vwap reclaim | short | 12 candles | 0.060% | Candidate, but weak |
+| COMP | mean reversion | short | 12 candles | 0.037% | Stable but too small |
+| TRX | wick reversal | short | 24 candles | 0.036% | Stable but too small |
+
+### Native Freqtrade Validation
+
+`Intp20Stage3EdgeStrategy` converted the best 15m per-pair coarse rules into
+native Freqtrade entries with fixed-hold `custom_exit` exits and 4x leverage.
+
+First short-window validation, `2025-01-01..2025-03-01`, all selected rules:
+
+| Candidate | Result |
+| --- | ---: |
+| Full Stage 3 rule basket | -4.07%, 95 trades, 9.41% DD |
+
+The basket was rejected. Positive short-window contributors were isolated into
+`Intp20Stage3EdgeShortCoreStrategy`:
+
+| Window | Pairs | Result | DD | Decision |
+| --- | --- | ---: | ---: | --- |
+| 2025-01-01..2025-03-01 | ETC, TRX | +6.99%, 38 trades | 2.85% | Short-window only |
+| 2024 | ETC, TRX | -2.71%, 135 trades | 14.47% | Reject combined |
+| 2025 | ETC, TRX | +2.59%, 185 trades | 14.41% | Too weak |
+| 2026-01-01..2026-05-31 | ETC, TRX | +8.31%, 45 trades | 1.53% | Too weak |
+
+Single-rule validation showed ETC short breakout is better than TRX, but still
+far from target:
+
+| Window | Pair/Rule | Result | DD |
+| --- | --- | ---: | ---: |
+| 2024 | ETC short breakout | +3.55% | 8.47% |
+| 2025 | ETC short breakout | -4.56% | 15.43% |
+| 2026-01-01..2026-05-31 | ETC short breakout | +8.21% | 1.64% |
+
+### Stage 3 Decision
+
+Stage 3 did not reach or approach 0.5% daily. The main improvement was tooling:
+we can now reject coarse overfit faster and translate candidates into native
+Freqtrade validation. Next search should add regime-conditioned exits and
+portfolio construction, because naive fixed-hold exits erase many coarse edges.
