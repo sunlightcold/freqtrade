@@ -380,3 +380,53 @@ class Intp20ShortFocusDcaStrategy(Intp20ShortCoreDcaStrategy):
         "TRX/",
         "XLM/",
     )
+
+
+class Intp20LongRobustDcaStrategy(Intp20LongOnlyDcaStrategy):
+    """
+    Walk-forward robust long pool.
+
+    Pairs must be positive in both the 2023-06..2024-12 training window and the
+    2025 validation window before being admitted to this research slice.
+    """
+
+    weak_long_pairs = (
+        "AAVE/",
+        "APT/",
+        "BCH/",
+        "BNB/",
+        "COMP/",
+        "LINK/",
+        "OP/",
+        "SOL/",
+        "SUI/",
+        "TRX/",
+        "XRP/",
+        "XTZ/",
+    )
+
+
+class Intp20ShortRobustDcaStrategy(Intp20ShortOnlyDcaStrategy):
+    """
+    Walk-forward robust short pool.
+
+    This remains a hedge candidate only: validation improved, but the 2026
+    holdout was effectively flat.
+    """
+
+    weak_short_pairs = (
+        "APT/",
+        "AVAX/",
+        "BNB/",
+        "BTC/",
+        "ETC/",
+        "ETH/",
+        "LINK/",
+        "LTC/",
+        "MKR/",
+        "OP/",
+        "SOL/",
+        "SUI/",
+        "XLM/",
+        "XRP/",
+    )
