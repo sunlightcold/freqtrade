@@ -232,3 +232,66 @@ best native candidate failed walk-forward and remains far below the requested
 0.5% daily target. The next stage should search multi-candidate portfolios and
 state-dependent exits, because single-pair panic-reversal edges are too sparse
 and too sensitive to tail-loss clusters.
+
+## Stage 6: Coarse Candidate Portfolio
+
+`research_candidate_portfolio.py` was added to rebuild trades from selected
+fast-screener CSV rows and score them as a combined portfolio. Each trade uses
+`12.5%` of account equity in the coarse model, approximating eight capital
+slots instead of full-account compounding per candidate.
+
+Generated CSV snapshots:
+
+- `user_data/research/stage6_5m_selected.csv`
+- `user_data/research/stage6_5m_portfolio_trades.csv`
+- `user_data/research/stage6_1m_selected.csv`
+- `user_data/research/stage6_1m_portfolio_trades.csv`
+
+### 5m Portfolio
+
+Selected candidates:
+
+| Pair | Template | Side | Regime | Hold |
+| --- | --- | --- | --- | ---: |
+| XTZ | panic snapback | long | market contra | 24 |
+| SOL | panic snapback | short | market contra | 24 |
+| SUI | RSI reversion | short | local chop | 24 |
+| XRP | RSI reversion | short | market extreme | 24 |
+| LINK | panic snapback | long | market contra | 24 |
+| AAVE | panic snapback | long | market contra | 24 |
+| COMP | RSI reversion | long | market extreme | 24 |
+
+Coarse portfolio result:
+
+| Window | Profit | Daily | Trades | Trades/Day | Max DD |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Total | +307.90% | 0.129% | 1079 | 0.992 | 16.57% |
+| 2024 | +118.46% | 0.215% | 432 | 1.187 | 13.20% |
+| 2025 | +44.66% | 0.103% | 346 | 0.966 | 16.57% |
+| 2026-01-01..2026-05-31 | +23.00% | 0.141% | 118 | 0.803 | 3.47% |
+
+### 1m Portfolio
+
+Selected candidates:
+
+| Pair | Template | Side | Regime | Hold |
+| --- | --- | --- | --- | ---: |
+| LINK | panic snapback | long | market contra | 40 |
+| XRP | panic snapback | long | market contra | 40 |
+
+Coarse portfolio result:
+
+| Window | Profit | Daily | Trades | Trades/Day | Max DD |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Total | +81.08% | 0.056% | 375 | 0.350 | 15.60% |
+| 2024 | +31.30% | 0.075% | 154 | 0.424 | 6.33% |
+| 2025 | +11.62% | 0.031% | 136 | 0.386 | 15.60% |
+| 2026-01-01..2026-05-31 | +10.77% | 0.092% | 27 | 0.243 | 2.10% |
+
+### Stage 6 Decision
+
+The 5m coarse portfolio is the most stable coarse result so far, but its
+`0.129%` daily return is still far below the requested `0.5%` daily target.
+It also needs native Freqtrade validation because Stage 5 showed coarse
+single-candidate results can fail once real stoploss and order handling are
+applied.
