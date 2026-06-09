@@ -561,3 +561,109 @@ class Intp20ShortMoonshotDcaStrategy(Intp20ShortFocusDcaStrategy):
         else:
             target = 5.0
         return min(target, max_leverage, 9.0)
+
+
+class Intp20LongNextGenDcaStrategy(Intp20LongMoonshotDcaStrategy):
+    """
+    Next-stage long research profile.
+
+    The first improvement is structural: keep the moonshot mechanics, but trade
+    only the seven-pair core that improved validation return and drawdown.
+    """
+
+    weak_long_pairs = (
+        "AAVE/",
+        "APT/",
+        "BCH/",
+        "BNB/",
+        "COMP/",
+        "ETC/",
+        "ETH/",
+        "LINK/",
+        "OP/",
+        "SUI/",
+        "TRX/",
+        "XRP/",
+        "XTZ/",
+    )
+
+
+class Intp20ShortRiskAdjustedDcaStrategy(Intp20ShortMoonshotDcaStrategy):
+    """
+    Lower-drawdown short-account profile.
+
+    This removes XTZ from the focused short pool after the next-stage screen
+    showed a better profit factor and lower drawdown without it.
+    """
+
+    weak_short_pairs = (
+        "AAVE/",
+        "AVAX/",
+        "BNB/",
+        "BTC/",
+        "COMP/",
+        "ETC/",
+        "ETH/",
+        "LINK/",
+        "LTC/",
+        "MKR/",
+        "OP/",
+        "SOL/",
+        "SUI/",
+        "TRX/",
+        "XLM/",
+        "XTZ/",
+    )
+
+
+class Intp20LongNextGenWeightedDcaStrategy(Intp20LongNextGenDcaStrategy):
+    """
+    Capital-weighted next-stage long research profile.
+
+    The signal rules stay identical to NextGen. Only per-pair capital sizing is
+    changed so stronger contributors receive more exposure while noisier pairs
+    keep their diversification role at lower risk.
+    """
+
+    pair_stake_weights = {
+        "MKR/": 1.14,
+        "AVAX/": 1.10,
+        "LTC/": 1.10,
+        "DOGE/": 1.02,
+        "BTC/": 0.94,
+        "XLM/": 0.72,
+        "SOL/": 0.70,
+    }
+
+    def custom_stake_amount(
+        self,
+        pair: str,
+        current_time: datetime,
+        current_rate: float,
+        proposed_stake: float,
+        min_stake: float | None,
+        max_stake: float,
+        leverage: float,
+        entry_tag: str | None,
+        side: str,
+        **kwargs,
+    ) -> float:
+        stake = super().custom_stake_amount(
+            pair,
+            current_time,
+            current_rate,
+            proposed_stake,
+            min_stake,
+            max_stake,
+            leverage,
+            entry_tag,
+            side,
+            **kwargs,
+        )
+        for prefix, weight in self.pair_stake_weights.items():
+            if pair.startswith(prefix):
+                stake *= weight
+                break
+        if min_stake:
+            stake = max(stake, min_stake)
+        return min(stake, max_stake)
