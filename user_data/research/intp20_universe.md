@@ -58,3 +58,34 @@ account, so true same-pair hedge exposure should be implemented as two bots:
 
 Both bots can use this same pair universe, but they should write to separate
 SQLite databases and expose different API ports.
+
+## 2026-06-09 Direction Study
+
+Backtests used Binance futures local data from 2023-06-02 to 2026-05-31 with
+`15m` signals and `1m` detail data. The first full 20-pair split showed that
+blindly trading every direction is not attractive:
+
+| Slice | Strategy | Total return | CAGR | Max drawdown | Profit factor |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Long all 20 | `Intp20LongOnlyDcaStrategy` | 24.78% | 7.70% | 41.13% | 1.11 |
+| Short all 20 | `Intp20ShortOnlyDcaStrategy` | -21.39% | -7.74% | 27.35% | 0.84 |
+
+The focused split keeps only the positive-expectancy side groups found in the
+first pass:
+
+| Slice | Strategy | Total return | CAGR | Max drawdown | Profit factor |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Long focus | `Intp20LongFocusDcaStrategy` | 101.20% | 26.38% | 5.09% | 2.99 |
+| Short focus | `Intp20ShortFocusDcaStrategy` | 29.08% | 8.92% | 8.07% | 1.85 |
+
+Focused long pool:
+
+- `AVAX`, `LTC`, `SOL`, `XLM`, `DOGE`, `MKR`, `XTZ`, `ETH`, `APT`, `BTC`, `ETC`
+
+Focused short pool:
+
+- `DOGE`, `BCH`, `XRP`, `APT`, `XTZ`
+
+These results support a two-subaccount Binance setup: run the long focus strategy
+on the long subaccount, and the short focus strategy on the short subaccount. It
+does not justify trading every one of the 20 pairs on both sides.
