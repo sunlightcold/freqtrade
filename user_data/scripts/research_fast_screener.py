@@ -1251,26 +1251,23 @@ def simulate(
         end_idx = min(entry_idx + hold, len(dataframe) - 1)
         exit_idx = end_idx
         exit_reason = "timeout"
+        window = slice(entry_idx + 1, end_idx + 1)
 
-        for j in range(entry_idx + 1, end_idx + 1):
-            if side == "long":
-                if low[j] <= entry * (1 - sl):
-                    exit_idx = j
-                    exit_reason = "stop"
-                    break
-                if high[j] >= entry * (1 + tp):
-                    exit_idx = j
-                    exit_reason = "tp"
-                    break
-            else:
-                if high[j] >= entry * (1 + sl):
-                    exit_idx = j
-                    exit_reason = "stop"
-                    break
-                if low[j] <= entry * (1 - tp):
-                    exit_idx = j
-                    exit_reason = "tp"
-                    break
+        if side == "long":
+            stop_hits = np.flatnonzero(low[window] <= entry * (1 - sl))
+            tp_hits = np.flatnonzero(high[window] >= entry * (1 + tp))
+        else:
+            stop_hits = np.flatnonzero(high[window] >= entry * (1 + sl))
+            tp_hits = np.flatnonzero(low[window] <= entry * (1 - tp))
+
+        first_stop = stop_hits[0] if len(stop_hits) else None
+        first_tp = tp_hits[0] if len(tp_hits) else None
+        if first_stop is not None and (first_tp is None or first_stop <= first_tp):
+            exit_idx = entry_idx + 1 + int(first_stop)
+            exit_reason = "stop"
+        elif first_tp is not None:
+            exit_idx = entry_idx + 1 + int(first_tp)
+            exit_reason = "tp"
 
         if side == "long":
             profit = close[exit_idx] / entry - 1
