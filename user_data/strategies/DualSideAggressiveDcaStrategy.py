@@ -183,3 +183,62 @@ class DualSideFilteredWider26DcaStrategy(DualSideAggressiveDcaStrategy):
                 "max_allowed_drawdown": 0.30,
             },
         ]
+
+
+class DualSideIntp20DcaStrategy(DualSideFilteredWider26DcaStrategy):
+    """
+    20-pair INTP-style futures research profile.
+
+    The rule set treats pair selection as a falsifiable hypothesis: every pair
+    is admitted to the universe, but each side gets filtered by observed
+    long/short expectancy tiers instead of assuming symmetry.
+    """
+
+    weak_long_pairs = (
+        "APT/",
+        "BCH/",
+        "BNB/",
+        "ETH/",
+        "LINK/",
+        "MKR/",
+        "OP/",
+        "SOL/",
+        "SUI/",
+        "TRX/",
+        "XLM/",
+    )
+    weak_short_pairs = (
+        "AVAX/",
+        "BNB/",
+        "BTC/",
+        "COMP/",
+        "DOGE/",
+        "ETC/",
+        "LINK/",
+        "LTC/",
+        "MKR/",
+        "OP/",
+    )
+
+    def leverage(
+        self,
+        pair: str,
+        current_time: datetime,
+        current_rate: float,
+        proposed_leverage: float,
+        max_leverage: float,
+        entry_tag: str | None,
+        side: str,
+        **kwargs,
+    ) -> float:
+        high_conviction = ("AAVE/", "AVAX/", "DOGE/", "LTC/", "XTZ/")
+        tactical = ("APT/", "BCH/", "COMP/", "SOL/", "SUI/", "XLM/", "XRP/")
+
+        if pair.startswith(high_conviction):
+            target = 4.0
+        elif pair.startswith(tactical):
+            target = 3.5
+        else:
+            target = 3.0
+
+        return min(target, max_leverage, 5.0)
