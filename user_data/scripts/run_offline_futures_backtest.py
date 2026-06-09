@@ -172,6 +172,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--export", default="trades")
     parser.add_argument("--breakdown", nargs="+", default=["month", "year"])
     parser.add_argument("--cache", default="none")
+    parser.add_argument(
+        "--enable-protections",
+        action="store_true",
+        help="Enable strategy protections during backtesting.",
+    )
     return parser.parse_args()
 
 
@@ -203,6 +208,8 @@ def main() -> None:
     if args.breakdown:
         cli_args.append("--breakdown")
         cli_args.extend(args.breakdown)
+    if args.enable_protections:
+        cli_args.append("--enable-protections")
 
     parsed = Arguments(cli_args).get_parsed_arg()
     config = setup_optimize_configuration(parsed, RunMode.BACKTEST)
