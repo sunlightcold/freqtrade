@@ -89,3 +89,43 @@ Focused short pool:
 These results support a two-subaccount Binance setup: run the long focus strategy
 on the long subaccount, and the short focus strategy on the short subaccount. It
 does not justify trading every one of the 20 pairs on both sides.
+
+## 2026-06-09 Walk-Forward Check
+
+To reduce data-fitting risk, the study was split into:
+
+- Training: 2023-06-02 to 2024-12-31.
+- Validation: 2025-01-01 to 2025-12-31.
+- Holdout test: 2026-01-01 to 2026-05-31.
+
+The first walk-forward rule selected pairs that were positive in training, then
+tested those selected pairs out of sample. This exposed weak generalization:
+
+| Slice | Selection rule | Validation return | Validation DD | Test return | Test DD |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Long | Positive in training only | 3.93% | 16.79% | 10.20% | 0.00% |
+| Short | Positive in training only | -25.37% | 31.44% | 4.55% | 12.20% |
+
+The stricter rule requires positive contribution in both training and validation
+before testing on 2026 holdout data:
+
+| Slice | Strategy | Training return | Validation return | Holdout return | Holdout DD |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Long robust | `Intp20LongRobustDcaStrategy` | 44.44% | 25.63% | 6.25% | 0.00% |
+| Short robust | `Intp20ShortRobustDcaStrategy` | 3.25% | 18.58% | -0.03% | 7.28% |
+
+Robust long pool:
+
+- `AVAX`, `BTC`, `DOGE`, `ETC`, `ETH`, `LTC`, `MKR`, `XLM`
+
+Robust short pool:
+
+- `AAVE`, `BCH`, `COMP`, `DOGE`, `TRX`, `XTZ`
+
+Interpretation:
+
+- The long side still has research value after walk-forward filtering.
+- The short side is not strong enough as a standalone return engine; use it only
+  as a small hedge candidate until live/dry-run evidence improves.
+- The earlier focus pools are higher-return in-sample candidates, but the robust
+  pools are the cleaner anti-overfit candidates.
