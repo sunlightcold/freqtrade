@@ -295,3 +295,36 @@ The 5m coarse portfolio is the most stable coarse result so far, but its
 It also needs native Freqtrade validation because Stage 5 showed coarse
 single-candidate results can fail once real stoploss and order handling are
 applied.
+
+### Native Freqtrade Validation
+
+`Intp20Stage6FiveMinutePortfolioStrategy` converted the selected 5m portfolio
+into native Freqtrade logic. It runs on available `1m` candles and internally
+resamples them to `5m` so the current local dataset can be reused.
+
+Validation command shape:
+
+```text
+python user_data/scripts/run_offline_futures_backtest.py \
+  -c user_data/config_binance_stage3_edge.json \
+  --strategy Intp20Stage6FiveMinutePortfolioStrategy \
+  --timeframe 1m \
+  --pairs XTZ/USDT:USDT SOL/USDT:USDT SUI/USDT:USDT XRP/USDT:USDT \
+          LINK/USDT:USDT AAVE/USDT:USDT COMP/USDT:USDT BTC/USDT:USDT \
+  --no-timeframe-detail --breakdown month --cache none
+```
+
+Native results:
+
+| Window | Profit | Trades | Max DD | Approx Daily | Decision |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 2025-01-01..2025-03-01 | +3.78% | 64 | 5.21% | 0.063% | Smoke pass |
+| 2024 | +53.58% | 414 | 9.67% | 0.119% | Positive, below target |
+| 2025 | +23.42% | 332 | 11.04% | 0.059% | Positive, below target |
+| 2026-01-01..2026-05-31 | +12.68% | 110 | 2.04% | 0.079% | Positive, below target |
+
+Stage 6 is the cleanest native-validated high-frequency baseline so far:
+positive across all validation slices with controlled drawdown. It still fails
+the requested `0.5%` daily target by a wide margin, so the next stage must
+increase opportunity count and improve exits without simply fitting one short
+window.
