@@ -328,3 +328,71 @@ positive across all validation slices with controlled drawdown. It still fails
 the requested `0.5%` daily target by a wide margin, so the next stage must
 increase opportunity count and improve exits without simply fitting one short
 window.
+
+## Stage 7: Aggressive Greedy Portfolio
+
+`research_greedy_portfolio.py` was added to build a higher-exposure portfolio
+from multiple screener CSVs with overlap de-duplication. A targeted exit scanner
+was also added so promising entries could be checked without launching broad
+bracket grids.
+
+Best coarse 5m aggressive result used 5x leverage and a 25% capital slot:
+
+| Window | Coarse Daily | Min Slice Daily | Trades/Day | Max DD |
+| --- | ---: | ---: | ---: | ---: |
+| Total | 0.504% | 0.464% | 2.33 | 48.84% |
+
+That reached the requested daily target only in the coarse simulator. Native
+Freqtrade validation showed the full basket was too noisy:
+
+| Strategy | Window | Profit | Trades | Max DD | Decision |
+| --- | --- | ---: | ---: | ---: | --- |
+| `Intp20Stage7AggressivePortfolioStrategy` | 2025-01-01..2025-03-01 | +4.12% | 153 | 28.10% | Reject full basket |
+| `Intp20Stage7AggressiveCoreStrategy` | 2025-01-01..2025-03-01 | +47.46% | 79 | 9.77% | Smoke pass, in-sample |
+
+Walk-forward native validation for the pruned core, using `stake=2500`,
+`max-open-trades=4`, and 5x strategy leverage:
+
+| Window | Profit | Trades | Max DD | Approx Daily | Notes |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 2024 | +105.71% | 498 | 37.39% | 0.198% | SUI tag was the main drag |
+| 2025 | +96.82% | 408 | 12.47% | 0.185% | Negative June and October |
+| 2026-01-01..2026-05-31 | +31.26% | 113 | 6.62% | 0.183% | XTZ slightly negative |
+
+Stage 7 is the strongest native-validated return stream so far, but it still
+does not reach `0.5%` daily outside the short smoke window. The coarse-to-native
+drop confirms that every high-return coarse basket must be treated as an idea
+source, not as an achieved target.
+
+## Stage 8: Pruning And Capacity Checks
+
+`Intp20Stage8NoSuiCoreStrategy` removes `sui_rsi_short_aligned_h24`, because it
+lost `-19.32%` in the 2024 native validation and did not contribute enough in
+2025/2026 to justify the tail risk. `Intp20Stage8LeaderCoreStrategy` removes
+TRX as well and keeps the leader tags only.
+
+Native validation at `stake=2500`, `max-open-trades=4`:
+
+| Strategy | Window | Profit | Trades | Max DD | Decision |
+| --- | --- | ---: | ---: | ---: | --- |
+| No-SUI core | 2024 | +125.02% | 414 | 19.15% | Better risk-adjusted |
+| No-SUI core | 2025 | +92.20% | 375 | 13.60% | Slightly lower return |
+| No-SUI core | 2026-01-01..2026-05-31 | +26.32% | 101 | 6.86% | Lower return |
+| Leader core | 2024 | +123.20% | 378 | 21.32% | No improvement |
+| Leader core | 2025 | +91.53% | 314 | 13.08% | Lower frequency |
+| Leader core | 2026-01-01..2026-05-31 | +23.52% | 91 | 6.12% | Lower frequency |
+
+Capacity check for the better No-SUI core, using `stake=3000` and
+`max-open-trades=6`:
+
+| Window | Profit | Trades | Max DD | Approx Daily |
+| --- | ---: | ---: | ---: | ---: |
+| 2024 | +150.02% | 414 | 21.50% | 0.252% |
+| 2025 | +110.64% | 375 | 14.81% | 0.206% |
+| 2026-01-01..2026-05-31 | +31.58% | 101 | 7.82% | 0.184% |
+
+Stage 8 improved robustness in 2024, but it still does not approach `0.5%`
+daily. Increasing exposure scales returns and drawdowns roughly linearly; it
+does not solve the opportunity-count problem. The next search must add new
+high-frequency streams, especially entries that trade during 2025-H2 without
+deepening the June/October loss clusters.
