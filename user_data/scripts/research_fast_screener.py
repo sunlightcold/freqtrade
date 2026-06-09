@@ -87,7 +87,7 @@ def load_pair(data_dir: Path, pair: str, timeframe: str) -> pd.DataFrame:
         return dataframe
 
     return (
-        dataframe.resample(timeframe, label="right", closed="right")
+        dataframe.resample(pandas_timeframe(timeframe), label="right", closed="right")
         .agg(
             {
                 "open": "first",
@@ -99,6 +99,12 @@ def load_pair(data_dir: Path, pair: str, timeframe: str) -> pd.DataFrame:
         )
         .dropna()
     )
+
+
+def pandas_timeframe(timeframe: str) -> str:
+    if timeframe.endswith("m") and timeframe[:-1].isdigit():
+        return f"{timeframe[:-1]}min"
+    return timeframe
 
 
 def load_prepared_pair(
