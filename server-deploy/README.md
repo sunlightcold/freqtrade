@@ -72,6 +72,32 @@ docker compose logs -f frequi
 
 保持 `dry_run=true`，直到模拟盘前向验证稳定。
 
+## Telegram 通知
+
+`server-deploy` 支持在 `.env` 里直接配置 Freqtrade 原生环境变量。Freqtrade 的格式是：
+
+```text
+FREQTRADE__配置段__配置项
+```
+
+启用 Telegram 通知：
+
+```env
+FREQTRADE__TELEGRAM__ENABLED=true
+FREQTRADE__TELEGRAM__TOKEN=你的TelegramBotToken
+FREQTRADE__TELEGRAM__CHAT_ID=你的ChatID
+FREQTRADE__TELEGRAM__ALLOW_CUSTOM_MESSAGES=true
+```
+
+重启：
+
+```bash
+docker compose up -d
+docker compose logs --tail=100 freqtrade
+```
+
+`.env` 默认不会提交到 GitHub，可以安全保存你的私有 token。
+
 ## 私有覆盖配置
 
 默认不需要 `config_server_api_override.json`。如确实需要叠加私有配置：

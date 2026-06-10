@@ -48,6 +48,8 @@ jobs:
         grep -q "ghcr.io/sunlightcold/freqtrade-frequi-zh:develop" .env.server.example
         grep -q "ghcr.io/sunlightcold/freqtrade-frequi-zh:develop" server-deploy/docker-compose.yml
         grep -q "ghcr.io/sunlightcold/freqtrade-frequi-zh:develop" server-deploy/.env.example
+        grep -q "env_file:" server-deploy/docker-compose.yml
+        grep -q "FREQTRADE__TELEGRAM__ENABLED" server-deploy/.env.example
 
   tests:
     if: github.repository == 'freqtrade/freqtrade' || github.event_name != 'push'
