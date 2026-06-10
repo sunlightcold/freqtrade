@@ -75,6 +75,18 @@ The current validated set does not reach the requested 0.5% average daily target
 .\.venv\Scripts\freqtrade.exe trade -c user_data\config_binance_stage13_validated_20pair_dryrun.json --strategy Intp20Stage13Validated20Strategy
 ```
 
+## 200U Small-Capital Dry Run
+
+For a 200 USDT account, use the proportional small-capital config:
+
+```powershell
+.\.venv\Scripts\freqtrade.exe trade -c user_data\config_binance_stage13_validated_20pair_200u_dryrun.json --strategy Intp20Stage13Validated20Strategy
+```
+
+This config keeps the 10,000 USDT research profile scaled down: `dry_run_wallet = 200`, `stake_amount = 20`, `max_open_trades = 8`, `tradable_balance_ratio = 0.95`, `amend_last_stake_amount = true`, isolated futures, and `liquidation_buffer = 0.08`.
+
+Smoke backtest for 2026-01-01 to 2026-05-31: 373 trades, 200 USDT starting balance, 271.011 USDT final balance, 71.011 USDT profit, 35.51% total profit, 1.74 profit factor, 4.07% max drawdown.
+
 ## Validation Commands
 
 ```powershell
