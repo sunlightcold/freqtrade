@@ -1,10 +1,28 @@
 ---
 services:
+  permissions-init:
+    image: "${FREQTRADE_IMAGE:-ghcr.io/sunlightcold/freqtrade:develop}"
+    pull_policy: always
+    container_name: ${PERMISSIONS_INIT_CONTAINER_NAME:-freqtrade-permissions-init}
+    user: "0:0"
+    volumes:
+      - "./user_data:/freqtrade/user_data"
+    entrypoint:
+      - "/bin/sh"
+      - "-ec"
+      - |
+        mkdir -p /freqtrade/user_data/logs
+        chown -R ${FREQTRADE_UID:-1000}:${FREQTRADE_GID:-1000} /freqtrade/user_data
+    command: []
+
   freqtrade:
     image: "${FREQTRADE_IMAGE:-ghcr.io/sunlightcold/freqtrade:develop}"
     pull_policy: always
     restart: unless-stopped
     container_name: ${FREQTRADE_CONTAINER_NAME:-freqtrade}
+    depends_on:
+      permissions-init:
+        condition: service_completed_successfully
     volumes:
       - "./user_data:/freqtrade/user_data"
     ports:

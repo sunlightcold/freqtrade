@@ -37,10 +37,17 @@ jobs:
         test -f docker/nginx/frequi.conf
         test -f docker-compose.yml
         test -f .env.server.example
+        test -f server-deploy/docker-compose.yml
+        test -f server-deploy/.env.example
+        test -f server-deploy/README.md
         grep -q "ghcr.io/sunlightcold/freqtrade:develop" docker-compose.yml
         grep -q "ghcr.io/sunlightcold/freqtrade:develop" .env.server.example
+        grep -q "ghcr.io/sunlightcold/freqtrade:develop" server-deploy/docker-compose.yml
+        grep -q "ghcr.io/sunlightcold/freqtrade:develop" server-deploy/.env.example
         grep -q "ghcr.io/sunlightcold/freqtrade-frequi-zh:develop" docker-compose.yml
         grep -q "ghcr.io/sunlightcold/freqtrade-frequi-zh:develop" .env.server.example
+        grep -q "ghcr.io/sunlightcold/freqtrade-frequi-zh:develop" server-deploy/docker-compose.yml
+        grep -q "ghcr.io/sunlightcold/freqtrade-frequi-zh:develop" server-deploy/.env.example
 
   tests:
     if: github.repository == 'freqtrade/freqtrade' || github.event_name != 'push'
