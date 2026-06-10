@@ -220,3 +220,72 @@ Deployment interpretation:
 - These are still research profiles. The long side is the real return engine;
   the short side remains a modest hedge engine and should not be sized as if it
   has the same expectancy as the long side.
+
+## 2026-06-10 Liquid Expansion Pass
+
+The first 20-pair universe was not intended to be permanent. After reviewing the
+Stage-12 attribution, the expansion pass focused on mainstream coins and
+high-liquidity alt futures rather than lower-liquidity satellite names.
+
+New complete-window candidates downloaded from Binance Vision:
+
+| Group | Pairs |
+| --- | --- |
+| Mainstream / large alt | `ADA`, `DOT`, `ATOM`, `ARB`, `NEAR`, `UNI`, `FIL`, `INJ`, `ALGO`, `HBAR` |
+| High-liquidity beta / thematic | `FET`, `GALA`, `RUNE`, `ICP`, `SAND`, `MANA`, `1000SHIB`, `1000PEPE` |
+| Short-history watchlist | `WLD`, `SEI` were checked but excluded from the 3-year window because the 2023-06 monthly 1m archive was not available |
+
+Data status:
+
+- Added full `1m` futures candles for all 18 selected expansion pairs.
+- Rebuilt `15m` and `1h` candles from the downloaded `1m` files.
+- Each selected pair covers `2023-06-02 00:00:00 UTC` through
+  `2026-05-31 23:59:00 UTC` with `1576800` one-minute candles.
+- Data files are intentionally left under ignored `user_data/data/binance` and
+  are not committed to git.
+
+Research outputs:
+
+- `user_data/research/expanded_liquid_alt_download_manifest.csv`
+- `user_data/research/local_futures_data_inventory.csv`
+- `user_data/research/local_futures_data_inventory_summary.csv`
+- `user_data/research/expanded_liquid_template_scan_summary.csv`
+- `user_data/research/expanded_liquid_template_scan_rank.csv`
+- `user_data/research/expanded_liquid_template_candidates.csv`
+- `user_data/research/expanded_liquid_best_by_base.csv`
+- `user_data/research/scan_expanded_liquid_universe.py`
+
+The first scan is a template-level research screen, not a native Freqtrade
+portfolio backtest. It applies generic 5m templates to the new pairs, with BTC
+regime filters, to find candidates worth converting into a native strategy.
+
+Best robust template candidate per newly added base, filtered to require at
+least `100` trades in the main validation windows and no losing main window:
+
+| Pair | Template | Side | Main Profit Sum | Main Trades | 2023H2 Check |
+| --- | --- | --- | ---: | ---: | ---: |
+| `NEAR` | RSI reversion | short | +218.42% | 225 | +14.30% |
+| `DOT` | RSI reversion | short | +218.31% | 140 | -16.16% |
+| `ICP` | RSI reversion | short | +205.89% | 168 | +19.37% |
+| `ADA` | Micro momentum | short | +204.62% | 402 | +55.58% |
+| `FET` | RSI reversion | long | +170.68% | 262 | +58.12% |
+| `RUNE` | Micro momentum | short | +157.00% | 383 | +56.73% |
+| `UNI` | RSI reversion | short | +151.80% | 184 | +10.80% |
+| `1000SHIB` | Micro momentum | long | +130.97% | 261 | +63.47% |
+| `1000PEPE` | Panic snapback | long | +120.51% | 296 | +27.41% |
+| `ARB` | RSI reversion | long | +118.22% | 256 | -21.95% |
+| `FIL` | Panic snapback | long | +82.19% | 221 | +24.66% |
+| `SAND` | Panic snapback | long | +63.67% | 230 | +11.09% |
+| `MANA` | Stoch turn | short | +59.43% | 106 | +6.21% |
+
+Interpretation:
+
+- `ADA`, `NEAR`, `DOT`, `ICP`, `FET`, `RUNE`, and `UNI` are the cleanest next
+  native-validation additions.
+- `1000SHIB` and `1000PEPE` have strong template results but should be treated
+  as high-beta meme exposure, not core mainstream exposure.
+- `ARB` and `DOT` have negative 2023H2 checks despite passing the main windows,
+  so they need stricter anti-overfit review.
+- The next step is to convert the best expansion templates into a Stage-13
+  native strategy class and run independent `2024`, `2025`, `2026-01..05`, and
+  `2023H2` Freqtrade backtests.

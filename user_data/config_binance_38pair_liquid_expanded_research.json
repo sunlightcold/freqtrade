@@ -1,0 +1,124 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "max_open_trades": 12,
+  "stake_currency": "USDT",
+  "stake_amount": 5000,
+  "tradable_balance_ratio": 1.0,
+  "fiat_display_currency": "USD",
+  "timeframe": "1m",
+  "strategy": "Intp20Stage12XtzCoreRocFilterStrategy",
+  "dry_run": true,
+  "dry_run_wallet": 10000,
+  "trading_mode": "futures",
+  "margin_mode": "isolated",
+  "futures_funding_rate": 0,
+  "cancel_open_orders_on_exit": false,
+  "position_adjustment_enable": true,
+  "max_entry_position_adjustment": 3,
+  "dataformat_ohlcv": "feather",
+  "dataformat_trades": "feather",
+  "unfilledtimeout": {
+    "entry": 10,
+    "exit": 10,
+    "exit_timeout_count": 0,
+    "unit": "minutes"
+  },
+  "entry_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1,
+    "price_last_balance": 0.0,
+    "check_depth_of_market": {
+      "enabled": false,
+      "bids_to_ask_delta": 1
+    }
+  },
+  "exit_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1
+  },
+  "exchange": {
+    "name": "binance",
+    "key": "",
+    "secret": "",
+    "ccxt_config": {},
+    "ccxt_async_config": {},
+    "pair_whitelist": [
+      "SOL/USDT:USDT",
+      "BTC/USDT:USDT",
+      "ETH/USDT:USDT",
+      "XRP/USDT:USDT",
+      "DOGE/USDT:USDT",
+      "BNB/USDT:USDT",
+      "SUI/USDT:USDT",
+      "BCH/USDT:USDT",
+      "TRX/USDT:USDT",
+      "OP/USDT:USDT",
+      "AVAX/USDT:USDT",
+      "LINK/USDT:USDT",
+      "APT/USDT:USDT",
+      "XLM/USDT:USDT",
+      "LTC/USDT:USDT",
+      "AAVE/USDT:USDT",
+      "MKR/USDT:USDT",
+      "ETC/USDT:USDT",
+      "COMP/USDT:USDT",
+      "XTZ/USDT:USDT",
+      "ADA/USDT:USDT",
+      "DOT/USDT:USDT",
+      "ATOM/USDT:USDT",
+      "ARB/USDT:USDT",
+      "NEAR/USDT:USDT",
+      "UNI/USDT:USDT",
+      "FIL/USDT:USDT",
+      "INJ/USDT:USDT",
+      "ALGO/USDT:USDT",
+      "HBAR/USDT:USDT",
+      "FET/USDT:USDT",
+      "GALA/USDT:USDT",
+      "RUNE/USDT:USDT",
+      "ICP/USDT:USDT",
+      "SAND/USDT:USDT",
+      "MANA/USDT:USDT",
+      "1000SHIB/USDT:USDT",
+      "1000PEPE/USDT:USDT"
+    ],
+    "pair_blacklist": [
+      ".*DOWN/USDT",
+      ".*UP/USDT",
+      ".*BULL/USDT",
+      ".*BEAR/USDT"
+    ]
+  },
+  "pairlists": [
+    {
+      "method": "StaticPairList"
+    }
+  ],
+  "telegram": {
+    "enabled": false,
+    "token": "",
+    "chat_id": ""
+  },
+  "api_server": {
+    "enabled": true,
+    "listen_ip_address": "0.0.0.0",
+    "listen_port": 8080,
+    "verbosity": "info",
+    "jwt_secret_key": "change-this-local-dev-jwt-secret-key-123456",
+    "ws_token": "change-this-local-dev-websocket-token",
+    "CORS_origins": [
+      "http://127.0.0.1:8081",
+      "http://localhost:8081"
+    ],
+    "username": "freqtrader",
+    "password": "SuperSecurePassword"
+  },
+  "bot_name": "freqtrade-binance-38pair-liquid-expanded-research",
+  "initial_state": "running",
+  "force_entry_enable": false,
+  "internals": {
+    "process_throttle_secs": 5
+  }
+}
