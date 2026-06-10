@@ -7,10 +7,13 @@ services:
     user: "0:0"
     volumes:
       - "./user_data:/freqtrade/user_data"
-    entrypoint: ["/bin/sh", "-c"]
-    command: >
-      mkdir -p /freqtrade/user_data/logs /freqtrade/user_data/frequi/installed
-      && chown -R ${FREQTRADE_UID:-1000}:${FREQTRADE_GID:-1000} /freqtrade/user_data
+    entrypoint:
+      - "/bin/sh"
+      - "-ec"
+      - |
+        mkdir -p /freqtrade/user_data/logs /freqtrade/user_data/frequi/installed
+        chown -R ${FREQTRADE_UID:-1000}:${FREQTRADE_GID:-1000} /freqtrade/user_data
+    command: []
 
   freqtrade:
     image: "${FREQTRADE_IMAGE:-ghcr.io/sunlightcold/freqtrade:develop}"
