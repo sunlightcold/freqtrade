@@ -1373,3 +1373,88 @@ class Intp20Stage12XtzCoreRocFilterStrategy(Intp20Stage11CNoXtzMaoffStrategy):
             else:
                 dataframe.loc[mask, ["stage7_enter_short", "stage7_enter_tag"]] = (True, tag)
         return dataframe
+
+
+class Intp20Stage13LiquidExpansionStrategy(Intp20Stage12XtzCoreRocFilterStrategy):
+    """
+    Stage-13 native validation candidate.
+
+    Adds liquid-expansion template candidates to the Stage-12 core. These pairs
+    were selected from the expanded 1m futures scan only after passing the main
+    template windows; this class exists to test them under native Freqtrade
+    portfolio constraints before any pair is promoted to dry-run.
+    """
+
+    stage13_rules = [
+        ("NEAR", "rsi_reversion", "short", "local_chop", 24, 4.0, {"atr_ceiling": 0.024, "atr_floor": 0.0006, "band_pad": 0.998, "bb_width": 0.0035, "macro_limit": 0.045, "mfi_low": 35, "rsi_2_long": 8, "rsi_2_short": 92, "stoch_low": 28, "volume_mult": 0.7}),
+        ("DOT", "rsi_reversion", "short", "local_chop", 24, 4.0, {"atr_ceiling": 0.024, "atr_floor": 0.0006, "band_pad": 0.998, "bb_width": 0.0035, "macro_limit": 0.045, "mfi_low": 35, "rsi_2_long": 8, "rsi_2_short": 92, "stoch_low": 28, "volume_mult": 0.7}),
+        ("ICP", "rsi_reversion", "short", "local_chop", 24, 4.0, {"atr_ceiling": 0.024, "atr_floor": 0.0006, "band_pad": 0.998, "bb_width": 0.0035, "macro_limit": 0.045, "mfi_low": 35, "rsi_2_long": 8, "rsi_2_short": 92, "stoch_low": 28, "volume_mult": 0.7}),
+        ("ADA", "micro_momentum", "short", "market_chop", 18, 5.0, {"atr_ceiling": 0.030, "atr_floor": 0.0015, "roc_fast": 0.0015, "roc_slow": 0.002, "rsi_cap": 74, "rsi_fast": 58, "slope": 0.0004, "volume_mult": 1.0, "volume_z": 0.4, "width_mult": 0.9}),
+        ("FET", "rsi_reversion", "long", "local_chop", 24, 4.0, {"atr_ceiling": 0.024, "atr_floor": 0.0006, "band_pad": 0.998, "bb_width": 0.0035, "macro_limit": 0.045, "mfi_low": 35, "rsi_2_long": 8, "rsi_2_short": 92, "stoch_low": 28, "volume_mult": 0.7}),
+        ("RUNE", "micro_momentum", "short", "market_chop", 18, 5.0, {"atr_ceiling": 0.030, "atr_floor": 0.0015, "roc_fast": 0.0015, "roc_slow": 0.002, "rsi_cap": 74, "rsi_fast": 58, "slope": 0.0004, "volume_mult": 1.0, "volume_z": 0.4, "width_mult": 0.9}),
+        ("UNI", "rsi_reversion", "short", "local_chop", 24, 4.0, {"atr_ceiling": 0.024, "atr_floor": 0.0006, "band_pad": 0.998, "bb_width": 0.0035, "macro_limit": 0.045, "mfi_low": 35, "rsi_2_long": 8, "rsi_2_short": 92, "stoch_low": 28, "volume_mult": 0.7}),
+        ("1000SHIB", "micro_momentum", "long", "market_chop", 18, 5.0, {"atr_ceiling": 0.030, "atr_floor": 0.0015, "roc_fast": 0.0015, "roc_slow": 0.002, "rsi_cap": 74, "rsi_fast": 58, "slope": 0.0004, "volume_mult": 1.0, "volume_z": 0.4, "width_mult": 0.9}),
+        ("1000PEPE", "panic_snapback", "long", "market_contra", 12, 4.0, {"atr_ceiling": 0.055, "atr_floor": 0.001, "range_mult": 0.85, "rsi_fast": 28, "shock": 0.004, "volume_z": 0.8, "wick_body": 1.4}),
+        ("ARB", "rsi_reversion", "long", "local_chop", 24, 4.0, {"atr_ceiling": 0.024, "atr_floor": 0.0006, "band_pad": 0.998, "bb_width": 0.0035, "macro_limit": 0.045, "mfi_low": 35, "rsi_2_long": 8, "rsi_2_short": 92, "stoch_low": 28, "volume_mult": 0.7}),
+        ("FIL", "panic_snapback", "long", "market_contra", 12, 4.0, {"atr_ceiling": 0.055, "atr_floor": 0.001, "range_mult": 0.85, "rsi_fast": 28, "shock": 0.004, "volume_z": 0.8, "wick_body": 1.4}),
+        ("SAND", "panic_snapback", "long", "market_contra", 12, 4.0, {"atr_ceiling": 0.055, "atr_floor": 0.001, "range_mult": 0.85, "rsi_fast": 28, "shock": 0.004, "volume_z": 0.8, "wick_body": 1.4}),
+        ("MANA", "stoch_turn", "short", "local_trend", 24, 4.0, {"atr_ceiling": 0.030, "atr_floor": 0.0006, "cci_low": -70, "range_mult": 0.7, "roc_limit": 0.018, "turn_level": 24, "volume_mult": 0.7}),
+    ]
+
+    @staticmethod
+    def _stage13_tag(index: int, base: str, template: str, side: str, regime: str, hold: int, leverage: float) -> str:
+        template_alias = {
+            "micro_momentum": "micro",
+            "panic_snapback": "panic",
+            "rsi_reversion": "rsi",
+            "stoch_turn": "stoch",
+        }[template]
+        regime_alias = {
+            "local_chop": "lc",
+            "local_trend": "lt",
+            "market_chop": "mchop",
+            "market_contra": "mc",
+        }[regime]
+        return f"s13_{index:02d}_{base.lower()}_{template_alias}_{side[0]}_{regime_alias}_h{hold}_l{int(leverage)}"
+
+    @classmethod
+    def _build_pair_signals(cls, dataframe: DataFrame, pair: str) -> DataFrame:
+        dataframe = super()._build_pair_signals(dataframe, pair)
+        base = pair.split("/")[0]
+
+        for index, (rule_base, template, side, regime, hold, leverage, params) in enumerate(
+            cls.stage13_rules,
+            start=1,
+        ):
+            if base != rule_base:
+                continue
+            mask = Intp20Stage9AggressiveBlendStrategy._signal_for_rule(
+                dataframe,
+                template,
+                side,
+                params,
+            )
+            mask &= Intp20Stage9AggressiveBlendStrategy._regime_filter(dataframe, regime, side)
+            mask &= dataframe["stage7_enter_tag"].isna()
+            tag = cls._stage13_tag(index, base, template, side, regime, hold, leverage)
+            if side == "long":
+                dataframe.loc[mask, ["stage7_enter_long", "stage7_enter_tag"]] = (True, tag)
+            else:
+                dataframe.loc[mask, ["stage7_enter_short", "stage7_enter_tag"]] = (True, tag)
+        return dataframe
+
+
+class Intp20Stage13Validated20Strategy(Intp20Stage13LiquidExpansionStrategy):
+    """
+    Stage-13 dry-run candidate with the validated 20-pair universe.
+
+    Keeps only the six expansion rules that survived native Freqtrade
+    pair-level validation well enough to promote alongside the Stage-12 base
+    universe. Excluded candidate rules stay in the broader research class.
+    """
+
+    stage13_rules = [
+        rule
+        for rule in Intp20Stage13LiquidExpansionStrategy.stage13_rules
+        if rule[0] in {"DOT", "ICP", "NEAR", "FET", "UNI", "MANA"}
+    ]
