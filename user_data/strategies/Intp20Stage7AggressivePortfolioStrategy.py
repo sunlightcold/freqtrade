@@ -1205,3 +1205,41 @@ class Intp20Stage11VwapStretchHybridStrategy(Intp20Stage10MaOffsetHybridStrategy
             else:
                 dataframe.loc[mask, ["stage10_enter_short", "stage10_enter_tag"]] = (True, tag)
         return dataframe
+
+
+class Intp20Stage11BPrunedVwapStretchStrategy(Intp20Stage11VwapStretchHybridStrategy):
+    """
+    Stage-11B pruning pass.
+
+    Removes Stage-10/11 add-on rules that were clear cross-year drag sources in
+    native validation while leaving the Stage-9C core untouched.
+    """
+
+    stage10_rules = [
+        rule
+        for rule in Intp20Stage10MaOffsetHybridStrategy.stage10_rules
+        if not (rule[0] == "XTZ" and rule[1] == "short" and rule[2] == "market_contra")
+    ]
+    stage11_rules = [
+        rule
+        for rule in Intp20Stage11VwapStretchHybridStrategy.stage11_rules
+        if not (
+            (rule[0] == "XTZ" and rule[1] == "long" and rule[2] == "market_chop")
+            or (rule[0] == "DOGE" and rule[1] == "short" and rule[2] == "market_chop")
+        )
+    ]
+
+
+class Intp20Stage11CNoXtzMaoffStrategy(Intp20Stage11VwapStretchHybridStrategy):
+    """
+    Stage-11C pruning pass.
+
+    Removes only the Stage-10 XTZ short MA-offset add-on while keeping all
+    Stage-11 VWAP-stretch rules for a narrower risk-control comparison.
+    """
+
+    stage10_rules = [
+        rule
+        for rule in Intp20Stage10MaOffsetHybridStrategy.stage10_rules
+        if not (rule[0] == "XTZ" and rule[1] == "short" and rule[2] == "market_contra")
+    ]
