@@ -69,6 +69,89 @@ Stop:
 docker compose down
 ```
 
+## Server Docker Deployment With Web UI
+
+On the server, install Docker and the Docker Compose plugin first. Then clone or upload this repository to the server.
+
+Copy the server env template:
+
+```bash
+cp .env.server.example .env
+```
+
+Edit `.env`:
+
+```text
+FREQTRADE_IMAGE=your-registry/your-freqtrade:latest
+FREQTRADE_API_BIND=0.0.0.0
+FREQTRADE_API_PORT=8080
+FREQUI_BIND=0.0.0.0
+FREQUI_PORT=8081
+FREQTRADE_API_PASSWORD=replace-with-a-strong-password
+FREQTRADE_API_JWT_SECRET_KEY=replace-with-a-long-random-jwt-secret
+FREQTRADE_API_WS_TOKEN=replace-with-a-long-random-websocket-token
+```
+
+Copy the server API override template:
+
+```bash
+cp user_data/config_server_api_override.example.json user_data/config_server_api_override.json
+```
+
+Edit `user_data/config_server_api_override.json`:
+
+```json
+{
+  "api_server": {
+    "CORS_origins": [
+      "http://YOUR_SERVER_IP:8081",
+      "https://YOUR_DOMAIN"
+    ],
+    "username": "freqtrader",
+    "password": "replace-with-a-strong-password",
+    "jwt_secret_key": "replace-with-a-long-random-jwt-secret",
+    "ws_token": "replace-with-a-long-random-websocket-token"
+  }
+}
+```
+
+Use the same password/JWT/WebSocket values in `.env` and `config_server_api_override.json`.
+
+Start the bot and Web UI:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Open:
+
+- Built-in Freqtrade UI/API: `http://YOUR_SERVER_IP:8080`
+- Standalone FreqUI static site: `http://YOUR_SERVER_IP:8081`
+
+Check status and logs:
+
+```bash
+docker compose ps
+docker compose logs -f freqtrade
+```
+
+Install or refresh UI files:
+
+```bash
+docker compose run --rm frequi-init
+docker compose restart freqtrade frequi
+```
+
+Update later:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+For a public server, prefer a reverse proxy with HTTPS and firewall allowlisting. If exposing raw ports, open only `8080` and `8081` to your own IP.
+
 ## 10,000U Research Profile
 
 To replay the research-sized dry-run profile instead of the 200U profile, set this in `.env`:

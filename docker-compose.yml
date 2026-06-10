@@ -9,11 +9,21 @@ services:
       - "./freqtrade/rpc/api_server/ui/installed:/freqtrade/freqtrade/rpc/api_server/ui/installed"
     ports:
       - "${FREQTRADE_API_BIND:-127.0.0.1}:${FREQTRADE_API_PORT:-8080}:8080"
+    environment:
+      FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS: "0.0.0.0"
+      FREQTRADE__API_SERVER__LISTEN_PORT: "8080"
+      FREQTRADE__API_SERVER__USERNAME: "${FREQTRADE_API_USERNAME:-freqtrader}"
+      FREQTRADE__API_SERVER__PASSWORD: "${FREQTRADE_API_PASSWORD:?Set FREQTRADE_API_PASSWORD in .env}"
+      FREQTRADE__API_SERVER__JWT_SECRET_KEY: "${FREQTRADE_API_JWT_SECRET_KEY:?Set FREQTRADE_API_JWT_SECRET_KEY in .env}"
+      FREQTRADE__API_SERVER__WS_TOKEN: "${FREQTRADE_API_WS_TOKEN:?Set FREQTRADE_API_WS_TOKEN in .env}"
+      FREQTRADE__EXCHANGE__KEY: "${FREQTRADE_EXCHANGE_KEY:-}"
+      FREQTRADE__EXCHANGE__SECRET: "${FREQTRADE_EXCHANGE_SECRET:-}"
     command: >
       trade
       --logfile /freqtrade/user_data/logs/freqtrade.log
       --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
       --config /freqtrade/user_data/${FREQTRADE_CONFIG:-config_binance_stage13_validated_20pair_200u_dryrun.json}
+      ${FREQTRADE_EXTRA_CONFIG_ARGS:-}
       --strategy ${FREQTRADE_STRATEGY:-Intp20Stage13Validated20Strategy}
 
   frequi-init:
