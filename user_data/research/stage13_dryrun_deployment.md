@@ -33,8 +33,15 @@ Copy-Item .env.example .env
 Edit `.env` and set your image:
 
 ```text
-FREQTRADE_IMAGE=your-registry/your-freqtrade:latest
+FREQTRADE_IMAGE=ghcr.io/sunlightcold/freqtrade:develop
 ```
+
+This image is produced by the fork workflow `.github/workflows/fork-ghcr-image.yml`.
+Every push to `develop` publishes:
+
+- `ghcr.io/sunlightcold/freqtrade:develop`
+- `ghcr.io/sunlightcold/freqtrade:sha-<commit>`
+- `ghcr.io/sunlightcold/freqtrade:latest` when the Docker tag is `develop`
 
 The default compose profile uses:
 
@@ -82,7 +89,7 @@ cp .env.server.example .env
 Edit `.env`:
 
 ```text
-FREQTRADE_IMAGE=your-registry/your-freqtrade:latest
+FREQTRADE_IMAGE=ghcr.io/sunlightcold/freqtrade:develop
 FREQTRADE_API_BIND=0.0.0.0
 FREQTRADE_API_PORT=8080
 FREQUI_BIND=0.0.0.0
@@ -123,6 +130,9 @@ Start the bot and Web UI:
 docker compose pull
 docker compose up -d
 ```
+
+If the server cannot pull from GHCR, either make the GitHub package public or run
+`docker login ghcr.io` on the server with a GitHub token that has package read access.
 
 Open:
 

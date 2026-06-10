@@ -1,7 +1,8 @@
 ---
 services:
   freqtrade:
-    image: "${FREQTRADE_IMAGE:?Set FREQTRADE_IMAGE in .env}"
+    image: "${FREQTRADE_IMAGE:-ghcr.io/sunlightcold/freqtrade:develop}"
+    pull_policy: always
     restart: unless-stopped
     container_name: ${FREQTRADE_CONTAINER_NAME:-freqtrade}
     volumes:
@@ -27,7 +28,8 @@ services:
       --strategy ${FREQTRADE_STRATEGY:-Intp20Stage13Validated20Strategy}
 
   frequi-init:
-    image: "${FREQTRADE_IMAGE:?Set FREQTRADE_IMAGE in .env}"
+    image: "${FREQTRADE_IMAGE:-ghcr.io/sunlightcold/freqtrade:develop}"
+    pull_policy: always
     container_name: ${FREQUI_INIT_CONTAINER_NAME:-frequi-init}
     volumes:
       - "./freqtrade/rpc/api_server/ui/installed:/freqtrade/freqtrade/rpc/api_server/ui/installed"
