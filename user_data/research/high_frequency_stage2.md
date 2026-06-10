@@ -445,3 +445,41 @@ threshold across all validation slices. Larger stake helps but does not fix the
 main bottleneck: Stage 9 does not create enough robust trades in 2026. The next
 stage must add genuinely new high-frequency opportunity sources rather than
 only pruning or scaling the same rules.
+
+## Stage 10: 1m MA-Offset Hybrid
+
+Stage 10 tested three new 1m templates in the fast screener:
+
+- `orb_breakout`
+- `vwap_stretch_reversion`
+- `ma_offset_reversion`
+
+The first accepted native candidate is `Intp20Stage10MaOffsetHybridStrategy`.
+It keeps the native-validated Stage-9C 5m core and adds sparse 1m MA-offset
+reversion rules. The Stage-10 tags use minute-based holds such as `h12m` and
+`h18m`, while Stage-9 tags keep the existing 5m-bar hold convention. This avoids
+accidentally turning a 12-minute 1m scalp into a 60-minute 5m hold.
+
+Native validation used `stake=4000`, `max-open-trades=8`, `dry-run-wallet=10000`,
+`timeframe=1m`, and the local Binance futures dataset.
+
+| Strategy | Window | Profit | Trades | Max DD | CAGR | Decision |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Stage 9C capacity baseline | 2024 | +233.86% | 672 | 22.23% | 232.76% | Baseline passes 200% year |
+| Stage 9C capacity baseline | 2025 | +215.43% | 583 | 13.69% | 215.43% | Baseline passes 200% year |
+| Stage 9C capacity baseline | 2026-01-01..2026-05-31 | +41.01% | 136 | 7.89% | 130.76% | Still below target |
+| Stage 10 Top3 MA-offset | 2026-01-01..2026-05-31 | +48.68% | 154 | 7.22% | 162.50% | Improves short slice, below target |
+| Stage 10 Hybrid | 2024 | +249.49% | 926 | 24.34% | 248.30% | Higher return, higher DD |
+| Stage 10 Hybrid | 2025 | +254.39% | 788 | 11.32% | 254.39% | Higher return, lower DD |
+| Stage 10 Hybrid | 2026-01-01..2026-05-31 | +50.38% | 171 | 7.14% | 169.89% | Improves short slice, still below target |
+
+### Stage 10 Decision
+
+Stage 10 is a real incremental improvement over Stage 9C: it increases trade
+count and improves all three validation windows at the tested exposure. It also
+confirms the main constraint: even after adding 1m mean-reversion scalps, the
+2026 slice still does not reach the requested `200%+` annualized threshold or
+the stricter `0.5%` daily target. The next stage should keep Stage 10 as the
+current best native candidate, then search for additional high-frequency streams
+that specifically trade in quiet 2026-style regimes without adding large tail
+losses.
