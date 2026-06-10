@@ -6,7 +6,7 @@ services:
     container_name: ${PERMISSIONS_INIT_CONTAINER_NAME:-freqtrade-permissions-init}
     user: "0:0"
     volumes:
-      - "./user_data:/freqtrade/user_data"
+      - "./server-deploy/user_data:/freqtrade/user_data"
     entrypoint:
       - "/bin/sh"
       - "-ec"
@@ -24,7 +24,7 @@ services:
       permissions-init:
         condition: service_completed_successfully
     volumes:
-      - "./user_data:/freqtrade/user_data"
+      - "./server-deploy/user_data:/freqtrade/user_data"
     ports:
       - "${FREQTRADE_API_BIND:-127.0.0.1}:${FREQTRADE_API_PORT:-8080}:8080"
     environment:
