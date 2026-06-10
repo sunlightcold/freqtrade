@@ -1,0 +1,16 @@
+{
+  "api_server": {
+    "enabled": true,
+    "listen_ip_address": "0.0.0.0",
+    "listen_port": 8080,
+    "verbosity": "info",
+    "jwt_secret_key": "replace-with-a-long-random-string",
+    "ws_token": "replace-with-a-long-random-string",
+    "CORS_origins": [
+      "http://YOUR_SERVER_IP_OR_DOMAIN:8081",
+      "https://YOUR_SERVER_IP_OR_DOMAIN"
+    ],
+    "username": "freqtrader",
+    "password": "replace-with-a-strong-password"
+  }
+}
