@@ -31,10 +31,15 @@ jobs:
     - name: Validate fork deployment assets
       run: |
         test -f .github/workflows/fork-ghcr-image.yml
+        test -f .github/workflows/fork-frequi-zh-image.yml
+        test -f docker/frequi-zh/Dockerfile
+        test -f docker/frequi-zh/zh-cn-overlay.js
         test -f docker-compose.yml
         test -f .env.server.example
         grep -q "ghcr.io/sunlightcold/freqtrade:develop" docker-compose.yml
         grep -q "ghcr.io/sunlightcold/freqtrade:develop" .env.server.example
+        grep -q "ghcr.io/sunlightcold/freqtrade-frequi-zh:develop" docker-compose.yml
+        grep -q "ghcr.io/sunlightcold/freqtrade-frequi-zh:develop" .env.server.example
 
   tests:
     if: github.repository == 'freqtrade/freqtrade' || github.event_name != 'push'
