@@ -949,3 +949,175 @@ class Intp20Stage9CrossYearCoreStrategy(Intp20Stage9PrunedSmokeStrategy):
         24,
         25,
     }
+
+
+class Intp20Stage10MaOffsetHybridStrategy(Intp20Stage9CrossYearCoreStrategy):
+    """
+    Stage-10 hybrid candidate.
+
+    Keeps the native-validated Stage-9C 5m core and adds sparse 1m MA-offset
+    reversion rules found by the Stage-10 screener. This is a validation
+    candidate, not an assumed improvement.
+    """
+
+    stage10_rules = [
+        ("OP", "long", "market_contra", 12, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0006, "bb_width": 0.0025, "ema20_offset": 0.0035, "ema50_guard": 0.020, "macro_limit": 0.055, "range_mult": 0.60, "rsi_2": 10, "slope_guard": 0.0030, "volume_mult": 0.7}),
+        ("ETC", "long", "market_chop", 18, 5.0, {"atr_ceiling": 0.030, "atr_floor": 0.0012, "bb_width": 0.0025, "ema20_offset": 0.0035, "ema50_guard": 0.020, "macro_limit": 0.055, "range_mult": 0.60, "rsi_2": 10, "slope_guard": 0.0030, "volume_mult": 0.7}),
+        ("XRP", "long", "market_aligned", 18, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0012, "bb_width": 0.0025, "ema20_offset": 0.0020, "ema50_guard": 0.020, "macro_limit": 0.055, "range_mult": 0.60, "rsi_2": 14, "slope_guard": 0.0030, "volume_mult": 0.7}),
+        ("DOGE", "long", "market_aligned", 12, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0006, "bb_width": 0.0025, "ema20_offset": 0.0035, "ema50_guard": 0.020, "macro_limit": 0.055, "range_mult": 0.60, "rsi_2": 14, "slope_guard": 0.0030, "volume_mult": 0.7}),
+        ("LTC", "long", "market_chop", 12, 5.0, {"atr_ceiling": 0.030, "atr_floor": 0.0006, "bb_width": 0.0025, "ema20_offset": 0.0035, "ema50_guard": 0.020, "macro_limit": 0.055, "range_mult": 0.60, "rsi_2": 10, "slope_guard": 0.0030, "volume_mult": 0.7}),
+        ("XLM", "long", "market_aligned", 12, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0012, "bb_width": 0.0025, "ema20_offset": 0.0020, "ema50_guard": 0.020, "macro_limit": 0.055, "range_mult": 0.60, "rsi_2": 10, "slope_guard": 0.0030, "volume_mult": 0.7}),
+        ("LTC", "long", "market_contra", 3, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0012, "bb_width": 0.0025, "ema20_offset": 0.0035, "ema50_guard": 0.020, "macro_limit": 0.055, "range_mult": 0.60, "rsi_2": 10, "slope_guard": 0.0030, "volume_mult": 0.7}),
+        ("XTZ", "short", "market_contra", 12, 5.0, {"atr_ceiling": 0.030, "atr_floor": 0.0012, "bb_width": 0.0025, "ema20_offset": 0.0020, "ema50_guard": 0.020, "macro_limit": 0.055, "range_mult": 0.60, "rsi_2": 14, "slope_guard": 0.0030, "volume_mult": 0.7}),
+        ("XRP", "long", "market_aligned", 12, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0006, "bb_width": 0.0025, "ema20_offset": 0.0020, "ema50_guard": 0.020, "macro_limit": 0.055, "range_mult": 0.60, "rsi_2": 10, "slope_guard": 0.0030, "volume_mult": 0.7}),
+    ]
+
+    @staticmethod
+    def _ma_offset_reversion(dataframe: DataFrame, side: str, params: dict) -> DataFrame:
+        risk_ok = (
+            (dataframe["atr_pct"] > params["atr_floor"])
+            & (dataframe["atr_pct"] < params["atr_ceiling"])
+            & (dataframe["volume"] > dataframe["volume_mean_48"] * params["volume_mult"])
+            & (dataframe["bb_width"] > params["bb_width"])
+            & (dataframe["range_pct"] > dataframe["atr_pct"] * params["range_mult"])
+        )
+        if side == "long":
+            return (
+                risk_ok
+                & (dataframe["close"] < dataframe["ema_20"] * (1 - params["ema20_offset"]))
+                & (dataframe["close"] > dataframe["ema_50"] * (1 - params["ema50_guard"]))
+                & (dataframe["ema_50_slope"] > -params["slope_guard"])
+                & (dataframe["rsi_2"] < params["rsi_2"])
+                & (dataframe["rsi_fast"] > dataframe["rsi_fast"].shift(1))
+                & (dataframe["close"] > dataframe["open"])
+                & (dataframe["roc_12"] > -params["macro_limit"])
+            )
+        return (
+            risk_ok
+            & (dataframe["close"] > dataframe["ema_20"] * (1 + params["ema20_offset"]))
+            & (dataframe["close"] < dataframe["ema_50"] * (1 + params["ema50_guard"]))
+            & (dataframe["ema_50_slope"] < params["slope_guard"])
+            & (dataframe["rsi_2"] > 100 - params["rsi_2"])
+            & (dataframe["rsi_fast"] < dataframe["rsi_fast"].shift(1))
+            & (dataframe["close"] < dataframe["open"])
+            & (dataframe["roc_12"] < params["macro_limit"])
+        )
+
+    @staticmethod
+    def _stage10_tag(index: int, base: str, side: str, regime: str, hold: int, leverage: float) -> str:
+        regime_alias = {
+            "market_aligned": "ma",
+            "market_contra": "mc",
+            "market_chop": "mchop",
+        }[regime]
+        return f"s10_{index:02d}_{base.lower()}_maoff_{side[0]}_{regime_alias}_h{hold}m_l{int(leverage)}"
+
+    @classmethod
+    def _build_stage10_signals(cls, dataframe: DataFrame, pair: str) -> DataFrame:
+        dataframe = dataframe.copy()
+        dataframe["stage10_enter_long"] = False
+        dataframe["stage10_enter_short"] = False
+        dataframe["stage10_enter_tag"] = None
+        base = pair.split("/")[0]
+
+        for index, (rule_base, side, regime, hold, leverage, params) in enumerate(
+            cls.stage10_rules,
+            start=1,
+        ):
+            if base != rule_base:
+                continue
+            mask = cls._ma_offset_reversion(dataframe, side, params)
+            mask &= Intp20Stage9AggressiveBlendStrategy._regime_filter(dataframe, regime, side)
+            mask &= dataframe["stage10_enter_tag"].isna()
+            tag = cls._stage10_tag(index, base, side, regime, hold, leverage)
+            if side == "long":
+                dataframe.loc[mask, ["stage10_enter_long", "stage10_enter_tag"]] = (True, tag)
+            else:
+                dataframe.loc[mask, ["stage10_enter_short", "stage10_enter_tag"]] = (True, tag)
+        return dataframe
+
+    def _btc_1m_regime(self) -> DataFrame:
+        if not self.dp:
+            return DataFrame()
+        btc = self.dp.get_pair_dataframe(pair="BTC/USDT:USDT", timeframe=self.timeframe)
+        btc_1m = self._add_5m_indicators(btc)
+        return btc_1m[
+            [
+                "date",
+                "market_bull",
+                "market_bear",
+                "market_high_vol",
+                "market_chop",
+                "market_panic_down",
+                "market_euphoria_up",
+            ]
+        ].rename(
+            columns={
+                "market_bull": "btc_market_bull",
+                "market_bear": "btc_market_bear",
+                "market_high_vol": "btc_market_high_vol",
+                "market_chop": "btc_market_chop",
+                "market_panic_down": "btc_market_panic_down",
+                "market_euphoria_up": "btc_market_euphoria_up",
+            }
+        )
+
+    def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        dataframe = super().populate_indicators(dataframe, metadata)
+        pair = metadata["pair"]
+        pair_1m = self._add_5m_indicators(dataframe)
+        btc_1m = self._btc_1m_regime()
+        if not btc_1m.empty:
+            pair_1m = pair_1m.merge(btc_1m, on="date", how="left")
+            btc_columns = [column for column in pair_1m.columns if column.startswith("btc_")]
+            pair_1m[btc_columns] = pair_1m[btc_columns].ffill().fillna(False)
+        else:
+            for column in (
+                "btc_market_bull",
+                "btc_market_bear",
+                "btc_market_high_vol",
+                "btc_market_chop",
+                "btc_market_panic_down",
+                "btc_market_euphoria_up",
+            ):
+                pair_1m[column] = False
+
+        signals = self._build_stage10_signals(pair_1m, pair)[
+            ["date", "stage10_enter_long", "stage10_enter_short", "stage10_enter_tag"]
+        ]
+        dataframe = dataframe.merge(signals, on="date", how="left")
+        dataframe["stage10_enter_long"] = dataframe["stage10_enter_long"].fillna(False)
+        dataframe["stage10_enter_short"] = dataframe["stage10_enter_short"].fillna(False)
+
+        free_slot = ~dataframe["stage7_enter_long"] & ~dataframe["stage7_enter_short"]
+        long_mask = free_slot & dataframe["stage10_enter_long"]
+        dataframe.loc[long_mask, "stage7_enter_long"] = True
+        dataframe.loc[long_mask, "stage7_enter_tag"] = dataframe.loc[
+            long_mask,
+            "stage10_enter_tag",
+        ]
+        short_mask = free_slot & dataframe["stage10_enter_short"]
+        dataframe.loc[short_mask, "stage7_enter_short"] = True
+        dataframe.loc[short_mask, "stage7_enter_tag"] = dataframe.loc[
+            short_mask,
+            "stage10_enter_tag",
+        ]
+        return dataframe
+
+    @staticmethod
+    def _hold_minutes_from_tag(enter_tag: str | None) -> int:
+        if enter_tag:
+            for token in enter_tag.split("_"):
+                if token.startswith("h") and token.endswith("m") and token[1:-1].isdigit():
+                    return int(token[1:-1])
+                if token.startswith("h") and token[1:].isdigit():
+                    return int(token[1:]) * 5
+        return 120
+
+
+class Intp20Stage10MaOffsetTop3Strategy(Intp20Stage10MaOffsetHybridStrategy):
+    """
+    Conservative Stage-10 variant with only the three strongest MA-offset rules.
+    """
+
+    stage10_rules = Intp20Stage10MaOffsetHybridStrategy.stage10_rules[:3]
