@@ -29,11 +29,4 @@ docker compose ps
 docker compose logs -f freqtrade
 ```
 
-## Refresh UI
-
-```bash
-docker compose run --rm frequi-init
-docker compose restart freqtrade frequi
-```
-
 Keep `dry_run=true` until forward validation is stable.

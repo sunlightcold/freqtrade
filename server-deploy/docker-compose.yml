@@ -7,7 +7,6 @@ services:
     container_name: ${FREQTRADE_CONTAINER_NAME:-freqtrade}
     volumes:
       - "./user_data:/freqtrade/user_data"
-      - "./freqtrade/rpc/api_server/ui/installed:/freqtrade/freqtrade/rpc/api_server/ui/installed"
     ports:
       - "${FREQTRADE_API_BIND:-127.0.0.1}:${FREQTRADE_API_PORT:-8080}:8080"
     environment:
@@ -27,23 +26,13 @@ services:
       ${FREQTRADE_EXTRA_CONFIG_ARGS:-}
       --strategy ${FREQTRADE_STRATEGY:-Intp20Stage13Validated20Strategy}
 
-  frequi-init:
-    image: "${FREQTRADE_IMAGE:-ghcr.io/sunlightcold/freqtrade:develop}"
-    pull_policy: always
-    container_name: ${FREQUI_INIT_CONTAINER_NAME:-frequi-init}
-    volumes:
-      - "./freqtrade/rpc/api_server/ui/installed:/freqtrade/freqtrade/rpc/api_server/ui/installed"
-    command: >
-      install-ui
-
   frequi:
-    image: ${FREQUI_IMAGE:-nginx:1.27-alpine}
+    image: ${FREQUI_IMAGE:-ghcr.io/sunlightcold/freqtrade-frequi-zh:develop}
+    pull_policy: always
     restart: unless-stopped
     container_name: ${FREQUI_CONTAINER_NAME:-frequi}
     depends_on:
-      frequi-init:
-        condition: service_completed_successfully
-    volumes:
-      - "./freqtrade/rpc/api_server/ui/installed:/usr/share/nginx/html:ro"
+      freqtrade:
+        condition: service_started
     ports:
       - "${FREQUI_BIND:-127.0.0.1}:${FREQUI_PORT:-8081}:80"
