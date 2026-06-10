@@ -483,3 +483,52 @@ the stricter `0.5%` daily target. The next stage should keep Stage 10 as the
 current best native candidate, then search for additional high-frequency streams
 that specifically trade in quiet 2026-style regimes without adding large tail
 losses.
+
+## Stage 11: VWAP-Stretch Hybrid And Pruning
+
+Stage 11 focused on 1m VWAP-stretch reversion as an additional high-frequency
+stream. The standalone VWAP-stretch greedy portfolio was too sparse:
+
+| Greedy Model | Trades | Profit | Daily | Min Slice Daily | Max DD | Decision |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| VWAP-stretch only | 163 | +15.60% | 0.014% | 0.015% | 1.76% | Low DD, too sparse |
+| Stage10 MA-offset + VWAP-stretch | 552 | +55.23% | 0.041% | 0.050% | 2.88% | Worth native validation |
+
+The combined greedy selected APT, SOL, ETC, DOGE, and XTZ VWAP-stretch add-ons.
+Those rules became `Intp20Stage11VwapStretchHybridStrategy`, which keeps the
+Stage-10 MA-offset hybrid intact and adds the VWAP-stretch rules as spare-slot
+1m entries.
+
+Native validation again used `stake=4000`, `max-open-trades=8`,
+`dry-run-wallet=10000`, `timeframe=1m`, and the local Binance futures dataset.
+
+| Strategy | Window | Profit | Trades | Max DD | Decision |
+| --- | --- | ---: | ---: | ---: | --- |
+| Stage 11 Hybrid | 2024 | +260.35% | 1001 | 24.47% | Passes return target, high DD |
+| Stage 11 Hybrid | 2025 | +257.17% | 872 | 11.73% | Strong |
+| Stage 11 Hybrid | 2026-01-01..2026-05-31 | +58.26% | 191 | 6.81% | Approx. 200%+ CAGR |
+| Stage 11B pruned | 2024 | +277.38% | 932 | 20.85% | Better 2024, lower DD |
+| Stage 11B pruned | 2025 | +265.98% | 800 | 12.27% | Higher return, slightly higher DD |
+| Stage 11B pruned | 2026-01-01..2026-05-31 | +55.24% | 177 | 6.94% | CAGR 191.60%, below target |
+| Stage 11C no XTZ MA-offset | 2024 | +272.61% | 959 | 21.64% | Better than Stage 11 risk/return |
+| Stage 11C no XTZ MA-offset | 2025 | +262.53% | 829 | 12.10% | Higher return than Stage 11 |
+| Stage 11C no XTZ MA-offset | 2026-01-01..2026-05-31 | +59.07% | 184 | 6.78% | Best short slice so far |
+
+### Stage 11 Decision
+
+`Intp20Stage11CNoXtzMaoffStrategy` is the current best native candidate. It
+removes only the Stage-10 XTZ short MA-offset add-on, while keeping the
+Stage-11 VWAP-stretch stream. This is a cleaner compromise than Stage 11B:
+Stage 11B reduced 2024 drawdown slightly more, but it also pushed the 2026
+slice below the `200%+` annualized target.
+
+Stage 11C finally clears the requested `200%+` annualized/yearly threshold in
+all three native validation slices at the tested exposure. It does not yet prove
+the stricter `0.5%` arithmetic daily target, and 2024 drawdown around `21.64%`
+is still high. The next stage should therefore target drawdown clusters rather
+than simply adding more entries:
+
+- July-September 2024 drawdown cluster.
+- October-December 2025 stagnation/drawdown cluster.
+- APT/XTZ/DOGE VWAP-stretch rules that flip between strong and weak years.
+- Dynamic exposure or pause filters that reduce stake during local loss clusters.
