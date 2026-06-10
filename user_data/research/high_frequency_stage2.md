@@ -595,3 +595,22 @@ closed-trade drawdown, but it does not eliminate the 2024 wallet underwater
 event around August-September. The next research pass should focus on that
 cluster directly, especially MKR micro long, SOL panic short, SUI VWAP long, and
 cross-asset risk throttling during broad chop/reversal periods.
+
+### Stage 12 Overfit Check
+
+After the XTZ-specific filter was added, an extra out-of-sample check was run on
+`2023-06-02..2024-01-01`, a period not used to choose the XTZ ROC filter.
+
+Native validation at `stake=5000`, `max-open-trades=8`, `dry-run-wallet=10000`:
+
+| Strategy | Window | Profit | Trades | Max DD | Decision |
+| --- | --- | ---: | ---: | ---: | --- |
+| Stage 11C capacity | 2023-06-03..2024-01-01 | +18.19% | 402 | 26.63% | Weak OOS baseline |
+| Stage 12 XTZ ROC filter | 2023-06-03..2024-01-01 | +18.70% | 396 | 27.00% | Does not materially improve OOS |
+
+This check does not prove the XTZ filter is universally robust. It only shows
+the filter did not materially damage the 2023H2 out-of-sample period. The larger
+finding is that the whole Stage 11/12 family is weak in 2023H2, so the strategy
+still needs a broader anti-overfit pass: more out-of-sample windows, parameter
+sensitivity checks around the `roc_48 >= 0` threshold, and a market-regime
+gate that can stand up outside the 2024-2026 selection period.
