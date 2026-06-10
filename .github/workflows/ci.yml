@@ -34,6 +34,7 @@ jobs:
         test -f .github/workflows/fork-frequi-zh-image.yml
         test -f docker/frequi-zh/Dockerfile
         test -f docker/frequi-zh/zh-cn-overlay.js
+        test -f docker/nginx/frequi.conf
         test -f docker-compose.yml
         test -f .env.server.example
         grep -q "ghcr.io/sunlightcold/freqtrade:develop" docker-compose.yml
