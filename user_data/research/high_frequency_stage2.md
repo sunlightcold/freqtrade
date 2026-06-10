@@ -594,9 +594,30 @@ uses the main validation windows only: `2024`, `2025`, and
 
 Detailed exports:
 
+- `user_data/research/stage12_yearly_portfolio_summary.csv`
+- `user_data/research/stage12_pair_year_native_summary.csv`
+- `user_data/research/stage12_pair_year_matrix.csv`
 - `user_data/research/stage12_all_pair_native_summary.csv`
 - `user_data/research/stage12_all_trade_native_summary.csv`
 - `user_data/research/stage12_all_pair_rank.csv`
+
+Capital/exposure assumptions for these Stage-12 native runs:
+
+- Starting balance / dry-run wallet: `10000 USDT`.
+- Stake amount: `5000 USDT` per trade.
+- Max open trades: `8`.
+- Strategy rule leverage: `4x` to `5x`, depending on the entry rule.
+- Return percentages below are calculated against the `10000 USDT` starting
+  balance for each independent backtest window.
+
+Portfolio-level yearly/window summary:
+
+| Window | Period | Principal | Stake | Max Open | Profit USDT | Return | CAGR | Trades | Final Balance | Max DD |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2023H2 OOS | 2023-06-03..2024-01-01 | 10000 | 5000 | 8 | +1870.15 | +18.70% | +34.52% | 396 | 11870.15 | 27.00% |
+| 2024 | 2024-01-01..2025-01-01 | 10000 | 5000 | 8 | +34085.74 | +340.86% | +339.07% | 940 | 44085.74 | 23.50% |
+| 2025 | 2025-01-01..2026-01-01 | 10000 | 5000 | 8 | +30797.39 | +307.97% | +307.97% | 794 | 40797.39 | 13.57% |
+| 2026-01..05 | 2026-01-01..2026-05-31 | 10000 | 5000 | 8 | +8764.51 | +87.65% | +362.51% | 174 | 18764.51 | 5.40% |
 
 | Rank | Pair | Total Profit USDT | Trades | Losing Windows |
 | ---: | --- | ---: | ---: | ---: |
@@ -621,12 +642,45 @@ Detailed exports:
 | 19 | BTC/USDT:USDT | +0.00 | 0 | 0 |
 | 20 | TRX/USDT:USDT | +0.00 | 0 | 0 |
 
+Pair-year matrix for the main validation windows:
+
+| Pair | 2024 Profit / Trades | 2025 Profit / Trades | 2026-01..05 Profit / Trades | Total Profit / Trades |
+| --- | ---: | ---: | ---: | ---: |
+| MKR | +5687.74 / 252 | +9721.20 / 167 | +0.00 / 0 | +15408.95 / 419 |
+| SOL | +5621.80 / 104 | +2988.47 / 92 | +487.17 / 24 | +9097.44 / 220 |
+| XLM | +5414.99 / 46 | +1726.22 / 76 | +550.17 / 13 | +7691.38 / 135 |
+| AAVE | +4308.51 / 51 | +719.08 / 46 | +2335.83 / 21 | +7363.42 / 118 |
+| XTZ | +2805.03 / 60 | +2168.18 / 57 | +1477.06 / 25 | +6450.27 / 142 |
+| XRP | +801.68 / 48 | +3178.88 / 46 | +1460.17 / 14 | +5440.73 / 108 |
+| ETH | +788.40 / 28 | +3177.17 / 19 | +131.24 / 2 | +4096.81 / 49 |
+| SUI | +1657.82 / 57 | +497.93 / 63 | +1334.72 / 26 | +3490.48 / 146 |
+| ETC | +2356.85 / 37 | +915.39 / 20 | +65.82 / 5 | +3338.06 / 62 |
+| LTC | +948.56 / 92 | +2002.41 / 118 | +108.16 / 17 | +3059.13 / 227 |
+| COMP | +2018.76 / 23 | +1151.68 / 17 | -152.71 / 4 | +3017.74 / 44 |
+| OP | -74.05 / 74 | +2387.00 / 29 | +324.06 / 12 | +2637.01 / 115 |
+| APT | +1205.45 / 23 | -139.19 / 32 | +433.04 / 7 | +1499.30 / 62 |
+| DOGE | +544.19 / 45 | +302.96 / 12 | +209.77 / 4 | +1056.91 / 61 |
+| AVAX | +0.00 / 0 | +0.00 / 0 | +0.00 / 0 | +0.00 / 0 |
+| BCH | +0.00 / 0 | +0.00 / 0 | +0.00 / 0 | +0.00 / 0 |
+| BNB | +0.00 / 0 | +0.00 / 0 | +0.00 / 0 | +0.00 / 0 |
+| BTC | +0.00 / 0 | +0.00 / 0 | +0.00 / 0 | +0.00 / 0 |
+| LINK | +0.00 / 0 | +0.00 / 0 | +0.00 / 0 | +0.00 / 0 |
+| TRX | +0.00 / 0 | +0.00 / 0 | +0.00 / 0 | +0.00 / 0 |
+
 This exposes a portfolio-coverage issue: the strategy has a 20-pair universe,
 but only 14 pairs are active in the main Stage-12 validation. `AVAX`, `BCH`,
 `BNB`, `BTC`, `LINK`, and `TRX` are currently idle under these rules. The next
 stage should either add robust rule families for those inactive pairs or replace
 them with pairs whose 1m futures behavior actually contributes across multiple
 windows.
+
+The zero rows are caused by strategy logic, not by missing pairlist membership:
+`BTC` is used as a market/regime filter in Stage 12 rather than as a traded
+asset. `AVAX`, `BCH`, `LINK`, `BNB`, and `TRX` appeared in earlier Stage-9
+candidate rules, but the Stage-9C cross-year rule selection did not keep those
+rule numbers. Stage 10/11 then added no new active rules for them. Therefore
+the final Stage-12 class can load their data and keep them in the whitelist,
+but it has no active entry path that produces trades for those bases.
 
 Per-window active-pair highlights:
 
