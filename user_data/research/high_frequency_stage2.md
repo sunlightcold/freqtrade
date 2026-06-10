@@ -585,6 +585,58 @@ Native validation at `stake=5000`, `max-open-trades=8`, `dry-run-wallet=10000`:
 | Stage 12 XTZ ROC filter | 2025 | +307.97% | 794 | 13.57% | 0.844% | Matches capacity return, slightly higher DD |
 | Stage 12 XTZ ROC filter | 2026-01-01..2026-05-31 | +87.65% | 174 | 5.40% | 0.584% | Best 2026 slice so far |
 
+### Stage 12 All-Pair Native Attribution
+
+The Stage-12 all-pair attribution below is parsed from the native Freqtrade
+backtest result zips, not from the faster research scanners. The ranked table
+uses the main validation windows only: `2024`, `2025`, and
+`2026-01-01..2026-05-31`.
+
+Detailed exports:
+
+- `user_data/research/stage12_all_pair_native_summary.csv`
+- `user_data/research/stage12_all_trade_native_summary.csv`
+- `user_data/research/stage12_all_pair_rank.csv`
+
+| Rank | Pair | Total Profit USDT | Trades | Losing Windows |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | MKR/USDT:USDT | +15408.95 | 419 | 0 |
+| 2 | SOL/USDT:USDT | +9097.44 | 220 | 0 |
+| 3 | XLM/USDT:USDT | +7691.38 | 135 | 0 |
+| 4 | AAVE/USDT:USDT | +7363.42 | 118 | 0 |
+| 5 | XTZ/USDT:USDT | +6450.27 | 142 | 0 |
+| 6 | XRP/USDT:USDT | +5440.73 | 108 | 0 |
+| 7 | ETH/USDT:USDT | +4096.81 | 49 | 0 |
+| 8 | SUI/USDT:USDT | +3490.48 | 146 | 0 |
+| 9 | ETC/USDT:USDT | +3338.06 | 62 | 0 |
+| 10 | LTC/USDT:USDT | +3059.13 | 227 | 0 |
+| 11 | COMP/USDT:USDT | +3017.74 | 44 | 1 |
+| 12 | OP/USDT:USDT | +2637.01 | 115 | 1 |
+| 13 | APT/USDT:USDT | +1499.30 | 62 | 1 |
+| 14 | DOGE/USDT:USDT | +1056.91 | 61 | 0 |
+| 15 | BCH/USDT:USDT | +0.00 | 0 | 0 |
+| 16 | AVAX/USDT:USDT | +0.00 | 0 | 0 |
+| 17 | LINK/USDT:USDT | +0.00 | 0 | 0 |
+| 18 | BNB/USDT:USDT | +0.00 | 0 | 0 |
+| 19 | BTC/USDT:USDT | +0.00 | 0 | 0 |
+| 20 | TRX/USDT:USDT | +0.00 | 0 | 0 |
+
+This exposes a portfolio-coverage issue: the strategy has a 20-pair universe,
+but only 14 pairs are active in the main Stage-12 validation. `AVAX`, `BCH`,
+`BNB`, `BTC`, `LINK`, and `TRX` are currently idle under these rules. The next
+stage should either add robust rule families for those inactive pairs or replace
+them with pairs whose 1m futures behavior actually contributes across multiple
+windows.
+
+Per-window active-pair highlights:
+
+| Window | Strongest Pairs | Weak / Idle Finding |
+| --- | --- | --- |
+| 2024 | MKR +5687.74, SOL +5621.80, XLM +5414.99, AAVE +4308.51 | OP -74.05; AVAX/BCH/BNB/BTC/LINK/TRX idle |
+| 2025 | MKR +9721.20, XRP +3178.88, ETH +3177.17, SOL +2988.47 | APT -139.19; AVAX/BCH/BNB/BTC/LINK/TRX idle |
+| 2026-01..05 | AAVE +2335.83, XTZ +1477.06, XRP +1460.17, SUI +1334.72 | COMP -152.71; AVAX/BCH/BNB/BTC/LINK/MKR/TRX idle |
+| 2023H2 OOS | OP +640.00, DOGE +554.38, SOL +524.09 | SUI -1002.82, LTC -183.62; six pairs idle |
+
 ### Stage 12 Decision
 
 `Intp20Stage12XtzCoreRocFilterStrategy` becomes the current best native
