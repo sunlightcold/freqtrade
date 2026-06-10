@@ -62,9 +62,12 @@ services:
     restart: unless-stopped
     container_name: ${FREQUI_CONTAINER_NAME:-frequi}
     depends_on:
+      freqtrade:
+        condition: service_started
       frequi-init:
         condition: service_completed_successfully
     volumes:
       - "./user_data/frequi/installed:/usr/share/nginx/html:ro"
+      - "./docker/nginx/frequi.conf:/etc/nginx/conf.d/default.conf:ro"
     ports:
       - "${FREQUI_BIND:-127.0.0.1}:${FREQUI_PORT:-8081}:80"
