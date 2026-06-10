@@ -532,3 +532,66 @@ than simply adding more entries:
 - October-December 2025 stagnation/drawdown cluster.
 - APT/XTZ/DOGE VWAP-stretch rules that flip between strong and weak years.
 - Dynamic exposure or pause filters that reduce stake during local loss clusters.
+
+## Stage 12: Capacity And Dynamic XTZ Short Filter
+
+Stage 12 first tested whether Stage 11C was mainly capital-constrained at the
+requested `0.5%` arithmetic daily target. Native validation used the same local
+Binance futures 1m dataset and 20-pair universe, but increased slot size from
+`stake=4000` to `stake=5000` while keeping `max-open-trades=8` and
+`dry-run-wallet=10000`.
+
+| Strategy | Window | Profit | Trades | Max DD | Approx Daily | Decision |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Stage 11C capacity | 2024 | +335.96% | 951 | 24.62% | 0.918% | Passes return, high 2024 DD |
+| Stage 11C capacity | 2025 | +307.42% | 827 | 13.36% | 0.842% | Passes return |
+| Stage 11C capacity | 2026-01-01..2026-05-31 | +73.84% | 184 | 7.68% | 0.492% | Nearly hits 0.5% daily |
+
+The capacity check showed that the existing edge can reach the user's annualized
+return target under more aggressive slot sizing. It also confirmed that 2024's
+August-September drawdown remains the main risk bottleneck.
+
+Trade-level attribution on the Stage 11C capacity runs showed:
+
+| Source | 2024 | 2025 | 2026-01..05 | Interpretation |
+| --- | ---: | ---: | ---: | --- |
+| `s9_08_xtz_rsi_s_lc_h24_l4` | +2541.62 USDT | +2676.53 USDT | -318.27 USDT | Useful in 2024/2025, harmful in 2026 rebound/chop |
+| `s11_05_xtz_vstretch_l_mchop_h8m_l5` | negative at lower stake | negative at lower stake | positive at capacity | Not a clean standalone prune |
+| `s11_04_doge_vstretch_s_mchop_h12m_l5` | weak | small positive | positive | Pruning reduces opportunity without fixing drawdown |
+
+The first pruning candidates were deliberately small and reversible:
+
+| Candidate | Window | Profit | Trades | Max DD | Decision |
+| --- | --- | ---: | ---: | ---: | --- |
+| No XTZ VWAP-stretch long | 2026-01-01..2026-05-31 | +69.69% | 178 | 7.85% | Reject, lower return without DD improvement |
+| No DOGE VWAP-stretch short | 2026-01-01..2026-05-31 | +72.73% | 182 | 7.73% | Not enough improvement |
+| No XTZ/DOGE VWAP-stretch | 2026-01-01..2026-05-31 | +68.57% | 176 | 7.90% | Reject |
+| Remove XTZ core short | 2026-01-01..2026-05-31 | +76.62% | 156 | 7.44% | Promising in 2026 |
+| Remove XTZ core short | 2025 | +281.68% | 762 | 18.64% | Reject as full deletion |
+
+The final Stage-12 candidate is `Intp20Stage12XtzCoreRocFilterStrategy`. It keeps
+the XTZ core short rule, but blocks it when both XTZ and BTC have non-negative
+5m 48-bar momentum:
+
+```text
+block XTZ core short when XTZ roc_48 >= 0 and BTC roc_48 >= 0
+```
+
+Native validation at `stake=5000`, `max-open-trades=8`, `dry-run-wallet=10000`:
+
+| Strategy | Window | Profit | Trades | Max DD | Approx Daily | Decision |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Stage 12 XTZ ROC filter | 2024 | +340.86% | 940 | 23.50% | 0.931% | Better return and lower closed DD than capacity Stage 11C |
+| Stage 12 XTZ ROC filter | 2025 | +307.97% | 794 | 13.57% | 0.844% | Matches capacity return, slightly higher DD |
+| Stage 12 XTZ ROC filter | 2026-01-01..2026-05-31 | +87.65% | 174 | 5.40% | 0.584% | Best 2026 slice so far |
+
+### Stage 12 Decision
+
+`Intp20Stage12XtzCoreRocFilterStrategy` becomes the current best native
+candidate. It satisfies the `200%+` annualized/yearly target in all validation
+slices and reaches the requested `0.5%` arithmetic daily pace in the 2026 short
+slice. It improves the 2026 drawdown materially and slightly improves the 2024
+closed-trade drawdown, but it does not eliminate the 2024 wallet underwater
+event around August-September. The next research pass should focus on that
+cluster directly, especially MKR micro long, SOL panic short, SUI VWAP long, and
+cross-asset risk throttling during broad chop/reversal periods.

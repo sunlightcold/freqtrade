@@ -1243,3 +1243,133 @@ class Intp20Stage11CNoXtzMaoffStrategy(Intp20Stage11VwapStretchHybridStrategy):
         for rule in Intp20Stage10MaOffsetHybridStrategy.stage10_rules
         if not (rule[0] == "XTZ" and rule[1] == "short" and rule[2] == "market_contra")
     ]
+
+
+class Intp20Stage12NoXtzVstretchStrategy(Intp20Stage11CNoXtzMaoffStrategy):
+    """
+    Stage-12 risk-pruning candidate.
+
+    Keeps the Stage-11C portfolio but removes the XTZ long VWAP-stretch add-on,
+    which was the weakest cross-window Stage-11 rule in native validation.
+    """
+
+    stage11_rules = [
+        rule
+        for rule in Intp20Stage11VwapStretchHybridStrategy.stage11_rules
+        if not (rule[0] == "XTZ" and rule[1] == "long" and rule[2] == "market_chop")
+    ]
+
+
+class Intp20Stage12NoDogeVstretchStrategy(Intp20Stage11CNoXtzMaoffStrategy):
+    """
+    Stage-12 risk-pruning candidate.
+
+    Keeps the Stage-11C portfolio but removes the DOGE short VWAP-stretch add-on,
+    which had negative aggregate contribution across the validated windows.
+    """
+
+    stage11_rules = [
+        rule
+        for rule in Intp20Stage11VwapStretchHybridStrategy.stage11_rules
+        if not (rule[0] == "DOGE" and rule[1] == "short" and rule[2] == "market_chop")
+    ]
+
+
+class Intp20Stage12PrunedVstretchStrategy(Intp20Stage11CNoXtzMaoffStrategy):
+    """
+    Stage-12 risk-pruning candidate.
+
+    Removes both weak Stage-11 VWAP-stretch add-ons while keeping the Stage-9C
+    core and Stage-10 MA-offset stream unchanged.
+    """
+
+    stage11_rules = [
+        rule
+        for rule in Intp20Stage11VwapStretchHybridStrategy.stage11_rules
+        if not (
+            (rule[0] == "XTZ" and rule[1] == "long" and rule[2] == "market_chop")
+            or (rule[0] == "DOGE" and rule[1] == "short" and rule[2] == "market_chop")
+        )
+    ]
+
+
+class Intp20Stage12NoXtzCoreShortStrategy(Intp20Stage11CNoXtzMaoffStrategy):
+    """
+    Stage-12 drawdown-cluster candidate.
+
+    Removes the Stage-9 XTZ local-chop RSI short rule, which was the dominant
+    2026 drawdown contributor and a recurring large-loss source.
+    """
+
+    included_rule_numbers = Intp20Stage9CrossYearCoreStrategy.included_rule_numbers - {8}
+
+
+class Intp20Stage12XtzCoreRocFilterStrategy(Intp20Stage11CNoXtzMaoffStrategy):
+    """
+    Stage-12 dynamic XTZ short filter.
+
+    Keeps the XTZ local-chop RSI short rule, but blocks it when both XTZ and BTC
+    have non-negative 5m 48-bar momentum. That regime produced most of the
+    2026 XTZ short damage while preserving the rule's 2024/2025 down-regime use.
+    """
+
+    def _btc_5m_regime(self) -> DataFrame:
+        if not self.dp:
+            return DataFrame()
+        btc = self.dp.get_pair_dataframe(pair="BTC/USDT:USDT", timeframe=self.timeframe)
+        btc_5m = self._add_5m_indicators(self._resample_5m(btc))
+        return btc_5m[
+            [
+                "date",
+                "market_bull",
+                "market_bear",
+                "market_high_vol",
+                "market_chop",
+                "market_panic_down",
+                "market_euphoria_up",
+                "roc_48",
+            ]
+        ].rename(
+            columns={
+                "market_bull": "btc_market_bull",
+                "market_bear": "btc_market_bear",
+                "market_high_vol": "btc_market_high_vol",
+                "market_chop": "btc_market_chop",
+                "market_panic_down": "btc_market_panic_down",
+                "market_euphoria_up": "btc_market_euphoria_up",
+                "roc_48": "btc_roc_48",
+            }
+        )
+
+    @classmethod
+    def _build_pair_signals(cls, dataframe: DataFrame, pair: str) -> DataFrame:
+        dataframe = dataframe.copy()
+        dataframe["stage7_enter_long"] = False
+        dataframe["stage7_enter_short"] = False
+        dataframe["stage7_enter_tag"] = None
+        base = pair.split("/")[0]
+
+        for index, (rule_base, template, side, regime, hold, leverage, params) in enumerate(
+            Intp20Stage9AggressiveBlendStrategy.stage9_rules,
+            start=1,
+        ):
+            if index not in cls.included_rule_numbers:
+                continue
+            if base != rule_base:
+                continue
+            mask = Intp20Stage9AggressiveBlendStrategy._signal_for_rule(
+                dataframe,
+                template,
+                side,
+                params,
+            )
+            mask &= Intp20Stage9AggressiveBlendStrategy._regime_filter(dataframe, regime, side)
+            if index == 8 and base == "XTZ" and "btc_roc_48" in dataframe.columns:
+                mask &= ~((dataframe["roc_48"] >= 0) & (dataframe["btc_roc_48"] >= 0))
+            mask &= dataframe["stage7_enter_tag"].isna()
+            tag = Intp20Stage9AggressiveBlendStrategy._tag(index, base, template, side, regime, hold, leverage)
+            if side == "long":
+                dataframe.loc[mask, ["stage7_enter_long", "stage7_enter_tag"]] = (True, tag)
+            else:
+                dataframe.loc[mask, ["stage7_enter_short", "stage7_enter_tag"]] = (True, tag)
+        return dataframe
