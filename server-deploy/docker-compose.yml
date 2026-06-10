@@ -23,8 +23,6 @@ services:
     depends_on:
       permissions-init:
         condition: service_completed_successfully
-    env_file:
-      - .env
     volumes:
       - "./user_data:/freqtrade/user_data"
     ports:

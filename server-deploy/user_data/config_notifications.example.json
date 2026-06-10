@@ -1,0 +1,8 @@
+{
+  "telegram": {
+    "enabled": false,
+    "token": "replace-with-your-telegram-bot-token",
+    "chat_id": "replace-with-your-telegram-chat-id",
+    "allow_custom_messages": true
+  }
+}

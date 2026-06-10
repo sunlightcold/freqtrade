@@ -74,19 +74,31 @@ docker compose logs -f frequi
 
 ## Telegram 通知
 
-`server-deploy` 支持在 `.env` 里直接配置 Freqtrade 原生环境变量。Freqtrade 的格式是：
+通知按 Freqtrade 官方标准写到 JSON 配置里，不把 token/chat_id 直接塞进 compose 配置。
 
-```text
-FREQTRADE__配置段__配置项
+复制通知配置模板：
+
+```bash
+cp user_data/config_notifications.example.json user_data/config_notifications.json
 ```
 
-启用 Telegram 通知：
+编辑 `user_data/config_notifications.json`：
+
+```json
+{
+  "telegram": {
+    "enabled": true,
+    "token": "你的TelegramBotToken",
+    "chat_id": "你的ChatID",
+    "allow_custom_messages": true
+  }
+}
+```
+
+然后在 `.env` 里叠加这个配置文件：
 
 ```env
-FREQTRADE__TELEGRAM__ENABLED=true
-FREQTRADE__TELEGRAM__TOKEN=你的TelegramBotToken
-FREQTRADE__TELEGRAM__CHAT_ID=你的ChatID
-FREQTRADE__TELEGRAM__ALLOW_CUSTOM_MESSAGES=true
+FREQTRADE_EXTRA_CONFIG_ARGS=--config /freqtrade/user_data/config_notifications.json
 ```
 
 重启：
@@ -96,7 +108,7 @@ docker compose up -d
 docker compose logs --tail=100 freqtrade
 ```
 
-`.env` 默认不会提交到 GitHub，可以安全保存你的私有 token。
+`config_notifications.json` 是私有配置，不要提交到 GitHub。
 
 ## 私有覆盖配置
 
