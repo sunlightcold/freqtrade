@@ -18,7 +18,11 @@ repos:
     rev: "v2.1.0"
     hooks:
       - id: mypy
-        exclude: build_helpers
+        exclude: |
+          (?x)^(
+              build_helpers|
+              user_data
+          )
         additional_dependencies:
           - types-cachetools==7.0.0.20260518
           - types-filelock==3.2.7
@@ -34,7 +38,9 @@ repos:
     rev: 'v0.15.15'
     hooks:
       - id: ruff
+        exclude: ^user_data/
       - id: ruff-format
+        exclude: ^user_data/
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
