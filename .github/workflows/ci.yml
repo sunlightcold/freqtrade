@@ -19,7 +19,25 @@ concurrency:
 permissions: {}
 
 jobs:
+  fork-sanity:
+    if: github.repository != 'freqtrade/freqtrade' && github.event_name == 'push'
+    name: "Fork sanity checks"
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+
+    - name: Validate fork deployment assets
+      run: |
+        test -f .github/workflows/fork-ghcr-image.yml
+        test -f docker-compose.yml
+        test -f .env.server.example
+        grep -q "ghcr.io/sunlightcold/freqtrade:develop" docker-compose.yml
+        grep -q "ghcr.io/sunlightcold/freqtrade:develop" .env.server.example
+
   tests:
+    if: github.repository == 'freqtrade/freqtrade' || github.event_name != 'push'
     name: "Tests and Linting"
     runs-on: ${{ matrix.os }}
     strategy:
@@ -168,6 +186,7 @@ jobs:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}  # zizmor: ignore[secrets-outside-env] Intentionally not using environment variable.
 
   mypy-version-check:
+    if: github.repository == 'freqtrade/freqtrade' || github.event_name != 'push'
     name: "Mypy Version Check"
     runs-on: ubuntu-24.04
     steps:
@@ -188,6 +207,7 @@ jobs:
         python build_helpers/pre_commit_update.py
 
   pre-commit:
+    if: github.repository == 'freqtrade/freqtrade' || github.event_name != 'push'
     name: "Pre-commit checks"
     runs-on: ubuntu-22.04
     steps:
@@ -203,6 +223,7 @@ jobs:
     - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
 
   docs-check:
+    if: github.repository == 'freqtrade/freqtrade' || github.event_name != 'push'
     name: "Documentation build"
     runs-on: ubuntu-22.04
     steps:
@@ -236,6 +257,7 @@ jobs:
 
 
   build-linux-online:
+    if: github.repository == 'freqtrade/freqtrade' || github.event_name != 'push'
     # Run pytest with "live" checks
     name: "Online / live tests"
     runs-on: ubuntu-24.04
@@ -290,7 +312,7 @@ jobs:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}  # zizmor: ignore[secrets-outside-env] Intentionally not using environment variable.
 
   build:
-    if: always()
+    if: always() && (github.repository == 'freqtrade/freqtrade' || github.event_name != 'push')
     name: "Build"
     needs: [
       tests,

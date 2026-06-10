@@ -16,6 +16,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  fork-docs-noop:
+    if: github.repository != 'freqtrade/freqtrade' && github.event_name == 'push'
+    name: Skip docs deploy on fork
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain skipped deployment
+        run: |
+          echo "Docs deployment is only published from freqtrade/freqtrade or releases."
+
   build-docs:
     if: github.repository == 'freqtrade/freqtrade' || github.event_name == 'release'
     permissions:
