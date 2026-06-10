@@ -135,6 +135,13 @@ class Intp20Stage7AggressivePortfolioStrategy(IStrategy):
             (typical_price * dataframe["volume"]).rolling(96).sum()
             / dataframe["volume"].rolling(96).sum()
         )
+        dataframe["vwap_96_dist"] = dataframe["close"] / dataframe["vwap_96"] - 1
+        dataframe["vwap_96_dist_mean"] = dataframe["vwap_96_dist"].rolling(96).mean()
+        dataframe["vwap_96_dist_std"] = dataframe["vwap_96_dist"].rolling(96).std()
+        dataframe["vwap_96_z"] = (
+            (dataframe["vwap_96_dist"] - dataframe["vwap_96_dist_mean"])
+            / dataframe["vwap_96_dist_std"]
+        )
 
         dataframe["local_up"] = (
             (dataframe["close"] > dataframe["ema_50"])
@@ -1121,3 +1128,80 @@ class Intp20Stage10MaOffsetTop3Strategy(Intp20Stage10MaOffsetHybridStrategy):
     """
 
     stage10_rules = Intp20Stage10MaOffsetHybridStrategy.stage10_rules[:3]
+
+
+class Intp20Stage11VwapStretchHybridStrategy(Intp20Stage10MaOffsetHybridStrategy):
+    """
+    Stage-11 validation candidate.
+
+    Keeps the native Stage-10 hybrid intact and adds sparse 1m VWAP-stretch
+    reversion rules that improved the coarse Stage-10/11 greedy portfolio.
+    """
+
+    stage11_rules = [
+        ("APT", "long", "market_aligned", 12, 5.0, {"atr_ceiling": 0.030, "atr_floor": 0.0006, "bb_width": 0.0025, "close_pos": 0.35, "macro_limit": 0.055, "min_dist": 0.0035, "rsi_2": 10, "volume_mult": 0.7, "z_entry": 1.8}),
+        ("SOL", "long", "market_chop", 12, 5.0, {"atr_ceiling": 0.030, "atr_floor": 0.0012, "bb_width": 0.0025, "close_pos": 0.35, "macro_limit": 0.055, "min_dist": 0.0035, "rsi_2": 10, "volume_mult": 0.7, "z_entry": 1.8}),
+        ("ETC", "long", "market_chop", 12, 5.0, {"atr_ceiling": 0.030, "atr_floor": 0.0006, "bb_width": 0.0025, "close_pos": 0.35, "macro_limit": 0.055, "min_dist": 0.0020, "rsi_2": 10, "volume_mult": 0.7, "z_entry": 2.4}),
+        ("DOGE", "short", "market_chop", 12, 5.0, {"atr_ceiling": 0.030, "atr_floor": 0.0012, "bb_width": 0.0025, "close_pos": 0.35, "macro_limit": 0.055, "min_dist": 0.0020, "rsi_2": 10, "volume_mult": 0.7, "z_entry": 2.4}),
+        ("XTZ", "long", "market_chop", 8, 5.0, {"atr_ceiling": 0.030, "atr_floor": 0.0006, "bb_width": 0.0025, "close_pos": 0.35, "macro_limit": 0.055, "min_dist": 0.0035, "rsi_2": 10, "volume_mult": 0.7, "z_entry": 1.8}),
+        ("APT", "long", "market_chop", 12, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0006, "bb_width": 0.0025, "close_pos": 0.35, "macro_limit": 0.055, "min_dist": 0.0035, "rsi_2": 10, "volume_mult": 0.7, "z_entry": 2.4}),
+        ("APT", "long", "market_aligned", 12, 5.0, {"atr_ceiling": 0.018, "atr_floor": 0.0006, "bb_width": 0.0025, "close_pos": 0.35, "macro_limit": 0.055, "min_dist": 0.0035, "rsi_2": 14, "volume_mult": 0.7, "z_entry": 2.4}),
+    ]
+
+    @staticmethod
+    def _vwap_stretch_reversion(dataframe: DataFrame, side: str, params: dict) -> DataFrame:
+        risk_ok = (
+            (dataframe["atr_pct"] > params["atr_floor"])
+            & (dataframe["atr_pct"] < params["atr_ceiling"])
+            & (dataframe["volume"] > dataframe["volume_mean_48"] * params["volume_mult"])
+            & (dataframe["bb_width"] > params["bb_width"])
+            & (dataframe["vwap_96_dist"].abs() > params["min_dist"])
+        )
+        if side == "long":
+            return (
+                risk_ok
+                & (dataframe["vwap_96_z"] < -params["z_entry"])
+                & (dataframe["close"] < dataframe["vwap_96"] * (1 - params["min_dist"]))
+                & (dataframe["rsi_2"] < params["rsi_2"])
+                & (dataframe["rsi_fast"] > dataframe["rsi_fast"].shift(1))
+                & (dataframe["close"] > dataframe["low"] + (dataframe["high"] - dataframe["low"]) * params["close_pos"])
+                & (dataframe["roc_24"] > -params["macro_limit"])
+            )
+        return (
+            risk_ok
+            & (dataframe["vwap_96_z"] > params["z_entry"])
+            & (dataframe["close"] > dataframe["vwap_96"] * (1 + params["min_dist"]))
+            & (dataframe["rsi_2"] > 100 - params["rsi_2"])
+            & (dataframe["rsi_fast"] < dataframe["rsi_fast"].shift(1))
+            & (dataframe["close"] < dataframe["high"] - (dataframe["high"] - dataframe["low"]) * params["close_pos"])
+            & (dataframe["roc_24"] < params["macro_limit"])
+        )
+
+    @staticmethod
+    def _stage11_tag(index: int, base: str, side: str, regime: str, hold: int, leverage: float) -> str:
+        regime_alias = {
+            "market_aligned": "ma",
+            "market_chop": "mchop",
+        }[regime]
+        return f"s11_{index:02d}_{base.lower()}_vstretch_{side[0]}_{regime_alias}_h{hold}m_l{int(leverage)}"
+
+    @classmethod
+    def _build_stage10_signals(cls, dataframe: DataFrame, pair: str) -> DataFrame:
+        dataframe = super()._build_stage10_signals(dataframe, pair)
+        base = pair.split("/")[0]
+
+        for index, (rule_base, side, regime, hold, leverage, params) in enumerate(
+            cls.stage11_rules,
+            start=1,
+        ):
+            if base != rule_base:
+                continue
+            mask = cls._vwap_stretch_reversion(dataframe, side, params)
+            mask &= Intp20Stage9AggressiveBlendStrategy._regime_filter(dataframe, regime, side)
+            mask &= dataframe["stage10_enter_tag"].isna()
+            tag = cls._stage11_tag(index, base, side, regime, hold, leverage)
+            if side == "long":
+                dataframe.loc[mask, ["stage10_enter_long", "stage10_enter_tag"]] = (True, tag)
+            else:
+                dataframe.loc[mask, ["stage10_enter_short", "stage10_enter_tag"]] = (True, tag)
+        return dataframe
