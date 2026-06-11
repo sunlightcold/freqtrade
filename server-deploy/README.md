@@ -182,7 +182,7 @@ Stage20 是独立策略，不覆盖 Stage19。它仍然使用 38 对 Binance U �
 
 ### 并行部署 Stage20，不影响当前模拟盘
 
-当前服务器仓库路径为 `/data/apps/freqtrade` 时，用独立 compose 项目和独立部署目录运行 Stage20。这样不会重建现有 `server-deploy` 里的模拟盘，Stage20 会使用自己的数据库、容器名和 WebUI 端口。
+当前服务器仓库路径为 `/data/apps/freqtrade` 时，用独立 compose 项目和独立部署目录运行 Stage20。这样不会重建现有 `server-deploy` 里的模拟盘，Stage20 会使用自己的数据库和 Freqtrade API 端口。WebUI 使用现有 `server-deploy` 的 FreqUI，在里面添加 Stage20 这个 Bot。
 
 ```bash
 cd /data/apps/freqtrade
@@ -208,46 +208,88 @@ set_env() {
 }
 
 set_env FREQTRADE_IMAGE ghcr.io/sunlightcold/freqtrade:develop
-set_env FREQUI_IMAGE ghcr.io/sunlightcold/freqtrade-frequi-zh:develop
 set_env FREQTRADE_CONFIG config_binance_stage20_adaptive_regime_newcoin_38pair_1000u_dryrun.json
 set_env FREQTRADE_STRATEGY Intp20Stage20AdaptiveRegimeNewcoinStrategy
 set_env STAGE20_HOTSPOT_INTERVAL_SECONDS 240
 set_env STAGE20_HOTSPOT_TIMEOUT_SECONDS 8
-set_env FREQTRADE_API_BIND 127.0.0.1
+set_env FREQTRADE_API_BIND 0.0.0.0
 set_env FREQTRADE_API_PORT 18080
-set_env FREQUI_BIND 0.0.0.0
-set_env FREQUI_PORT 18081
 set_env FREQTRADE_EXCHANGE_KEY ""
 set_env FREQTRADE_EXCHANGE_SECRET ""
+set_env FREQTRADE_EXTRA_CONFIG_ARGS "--config /freqtrade/user_data/config_server_api_override.json"
+
+SERVER_ORIGIN="http://82.158.225.90:8081"
+python3 - "$SERVER_ORIGIN" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+origin = sys.argv[1]
+path = Path("user_data/config_server_api_override.json")
+example = Path("user_data/config_server_api_override.example.json")
+data = json.loads(
+    path.read_text(encoding="utf-8")
+    if path.exists()
+    else example.read_text(encoding="utf-8")
+)
+api_server = data.setdefault("api_server", {})
+api_server["CORS_origins"] = [origin]
+path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PY
 
 docker compose -p freqtrade-stage20 --profile stage20 pull
-docker compose -p freqtrade-stage20 --profile stage20 up -d --remove-orphans
+docker compose -p freqtrade-stage20 --profile stage20 up -d --no-deps freqtrade stage20-hotspot
 docker compose -p freqtrade-stage20 --profile stage20 ps
 ```
 
-Stage20 WebUI:
+现有 WebUI:
 
 ```text
-http://服务器IP:18081
+http://服务器IP:8081
 ```
 
-登录页填写：
+在 FreqUI 里添加一个 Bot：
 
 ```text
-Bot Name: freqtrade
-API Url: http://服务器IP:18081
+Bot Name: stage20
+API Url: http://服务器IP:18080
 Username: .env 里的 FREQTRADE_API_USERNAME
 Password: .env 里的 FREQTRADE_API_PASSWORD
+```
+
+`config_server_api_override.json` 里需要允许现有 WebUI 来源，例如 `http://82.158.225.90:8081`。如果服务器 IP 或域名变了，按下面更新：
+
+```bash
+cd /data/apps/freqtrade/server-deploy-stage20
+SERVER_ORIGIN="http://82.158.225.90:8081"
+python3 - "$SERVER_ORIGIN" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+origin = sys.argv[1]
+path = Path("user_data/config_server_api_override.json")
+example = Path("user_data/config_server_api_override.example.json")
+data = json.loads(
+    path.read_text(encoding="utf-8")
+    if path.exists()
+    else example.read_text(encoding="utf-8")
+)
+api_server = data.setdefault("api_server", {})
+api_server["CORS_origins"] = [origin]
+path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PY
+docker compose -p freqtrade-stage20 --profile stage20 up -d --no-deps freqtrade
 ```
 
 如果只重启 Stage20，不影响原策略：
 
 ```bash
 cd /data/apps/freqtrade/server-deploy-stage20
-docker compose -p freqtrade-stage20 --profile stage20 up -d
+docker compose -p freqtrade-stage20 --profile stage20 up -d --no-deps freqtrade stage20-hotspot
 ```
 
-如果旧版本 `.env` 里固定过容器名，可能出现 `frequi-stage20` / `freqtrade-stage20` / `freqtrade-permissions-init-stage20` 已存在的冲突。升级到新版 compose 后先清理旧容器名：
+如果旧版本 `.env` 里固定过容器名，可能出现 `frequi-stage20` / `freqtrade-stage20` / `freqtrade-permissions-init-stage20` 已存在的冲突。升级到新版 compose 后先清理旧容器名，并移除第二个 WebUI：
 
 ```bash
 cd /data/apps/freqtrade/server-deploy-stage20
@@ -258,8 +300,10 @@ sed -i '/^FREQTRADE_CONTAINER_NAME=/d' .env
 sed -i '/^FREQUI_CONTAINER_NAME=/d' .env
 sed -i '/^PERMISSIONS_INIT_CONTAINER_NAME=/d' .env
 sed -i '/^STAGE20_HOTSPOT_CONTAINER_NAME=/d' .env
+sed -i '/^FREQUI_BIND=/d' .env
+sed -i '/^FREQUI_PORT=/d' .env
 
-docker compose -p freqtrade-stage20 --profile stage20 up -d --remove-orphans
+docker compose -p freqtrade-stage20 --profile stage20 up -d --no-deps freqtrade stage20-hotspot
 ```
 
 停掉 Stage20，也不影响原策略：
