@@ -11,6 +11,9 @@
     ["Settings", "设置"],
     ["Multi Pane", "多面板"],
     ["Multi-Pane", "多面板"],
+    ["Start Trading", "启动交易"],
+    ["Stop Trading", "停止交易"],
+    ["Reload Config", "重新加载配置"],
     ["Open Trades", "当前持仓"],
     ["No data available", "暂无数据"],
     ["Currently no open trades.", "当前没有持仓。"],
@@ -39,6 +42,7 @@
     ["Total Profit %", "总收益 %"],
     ["Total profit", "总收益"],
     ["Total profit %", "总收益 %"],
+    ["Avg Profit 0.000% (Σ 0.000%) in 0 Trades, with an average duration of 0:00:00. Best pair: .", "平均收益 0.000%（合计 0.000%），共 0 笔交易，平均持仓 0:00:00。最佳币对：无。"],
     ["Total Trades", "交易次数"],
     ["Total trades", "交易次数"],
     ["Avg Profit", "平均收益"],
@@ -46,6 +50,7 @@
     ["Avg Duration", "平均持仓时间"],
     ["Avg duration", "平均持仓时间"],
     ["Best Pair", "最佳币对"],
+    ["Best pair", "最佳币对"],
     ["Refresh", "刷新"],
     ["Theme", "主题"],
     ["Light", "浅色"],
@@ -75,6 +80,7 @@
     ["Running", "运行中"],
     ["Stopped", "已停止"],
     ["Dry run", "模拟盘"],
+    ["Dry-Run", "模拟盘"],
     ["Backtesting", "回测"],
     ["Live", "实盘"],
     ["Balance", "余额"],
@@ -87,6 +93,31 @@
     ["Strategy", "策略"],
     ["Timeframe", "周期"],
     ["Version", "版本"],
+    ["Strategy parameters", "策略参数"],
+    ["Profits for", "收益统计"],
+    ["Trades", "交易"],
+    ["Metric", "指标"],
+    ["Value", "数值"],
+    ["ROI closed trades", "已平仓交易 ROI"],
+    ["ROI all trades", "全部交易 ROI"],
+    ["Total Trade count", "总交易次数"],
+    ["Bot started", "机器人启动时间"],
+    ["First Trade opened", "第一笔交易开仓时间"],
+    ["Latest Trade opened", "最近一笔交易开仓时间"],
+    ["Win / Loss", "盈利 / 亏损"],
+    ["Winrate", "胜率"],
+    ["Expectancy (ratio)", "期望值（比率）"],
+    ["CAGR", "年化复合收益率"],
+    ["Calmar", "Calmar 比率"],
+    ["Sharpe", "夏普比率"],
+    ["Sortino", "索提诺比率"],
+    ["SQN", "系统质量指数"],
+    ["Avg. Duration", "平均持仓时间"],
+    ["Best performing", "最佳表现"],
+    ["Trading volume", "交易额"],
+    ["Profit factor", "收益因子"],
+    ["Max Drawdown", "最大回撤"],
+    ["Current Drawdown", "当前回撤"],
     ["Open date", "开仓时间"],
     ["Close date", "平仓时间"],
     ["Close rate", "平仓价格"],
@@ -170,6 +201,7 @@
     ["Bot name is required.", "请填写机器人名称。"],
     ["Username is required.", "请填写用户名。"],
     ["Password is required.", "请填写密码。"],
+    ["All", "全部"],
   ]);
 
   const attributeText = new Map([
@@ -179,9 +211,17 @@
     ["Password", "密码"],
     ["Filter", "筛选"],
     ["Search", "搜索"],
+    ["Start Trading", "启动交易"],
+    ["Stop Trading", "停止交易"],
+    ["Reload Config", "重新加载配置"],
   ]);
 
   const replacements = [
+    [/^Running Freqtrade\s+(.+)$/i, "正在运行 Freqtrade $1"],
+    [/^Running with\s+(.+?)\s+on\s+(.+?)\s+in\s+(.+?)\s+markets,\s+with Strategy\s+(.+)\.$/i, "运行配置：$1，交易所：$2，市场模式：$3，策略：$4。"],
+    [/^Stoploss on exchange is\s+(.+)\.$/i, "交易所止损：$1。"],
+    [/^Currently\s+(.+?),\s+force entry:\s+(.+)$/i, "当前状态：$1，强制开仓：$2"],
+    [/^Avg Profit\s+(.+?)\s+\(Σ\s+(.+?)\)\s+in\s+(\d+)\s+Trades,\s+with an average duration of\s+(.+?)\.\s+Best pair:\s*(.*)$/i, "平均收益 $1（合计 $2），共 $3 笔交易，平均持仓 $4。最佳币对：$5"],
     [/^Long entries:\s*(\d+)\s+Long exit:\s*(\d+)$/i, "多头开仓：$1 多头平仓：$2"],
     [/^Short entries:\s*(\d+)\s+Short exit:\s*(\d+)$/i, "空头开仓：$1 空头平仓：$2"],
     [/^You can verify this by navigating to (.+) to make sure the bot API is reachable\.?$/i, "你可以打开 $1 来确认 Bot API 是否可访问。"],
@@ -206,13 +246,20 @@
       return value;
     }
 
+    const normalized = trimmed.replace(/\s+/g, " ");
     if (exactText.has(trimmed)) {
       return preserveWhitespace(value, exactText.get(trimmed));
+    }
+    if (exactText.has(normalized)) {
+      return preserveWhitespace(value, exactText.get(normalized));
     }
 
     for (const [pattern, replacement] of replacements) {
       if (pattern.test(trimmed)) {
         return preserveWhitespace(value, trimmed.replace(pattern, replacement));
+      }
+      if (pattern.test(normalized)) {
+        return preserveWhitespace(value, normalized.replace(pattern, replacement));
       }
     }
 
