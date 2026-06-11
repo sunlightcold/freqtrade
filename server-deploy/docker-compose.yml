@@ -3,7 +3,6 @@ services:
   permissions-init:
     image: "${FREQTRADE_IMAGE:-ghcr.io/sunlightcold/freqtrade:develop}"
     pull_policy: always
-    container_name: ${PERMISSIONS_INIT_CONTAINER_NAME:-freqtrade-permissions-init}
     user: "0:0"
     volumes:
       - "./user_data:/freqtrade/user_data"
@@ -48,7 +47,7 @@ services:
     image: "${FREQTRADE_IMAGE:-ghcr.io/sunlightcold/freqtrade:develop}"
     profiles: ["stage18"]
     pull_policy: always
-    restart: unless-stopped
+    restart: on-failure
     container_name: ${STAGE18_HOTSPOT_CONTAINER_NAME:-stage18-hotspot}
     depends_on:
       permissions-init:
@@ -69,7 +68,7 @@ services:
     image: "${FREQTRADE_IMAGE:-ghcr.io/sunlightcold/freqtrade:develop}"
     profiles: ["stage19"]
     pull_policy: always
-    restart: unless-stopped
+    restart: on-failure
     container_name: ${STAGE19_HOTSPOT_CONTAINER_NAME:-stage19-hotspot}
     depends_on:
       permissions-init:
@@ -90,7 +89,7 @@ services:
     image: "${FREQTRADE_IMAGE:-ghcr.io/sunlightcold/freqtrade:develop}"
     profiles: ["stage20"]
     pull_policy: always
-    restart: unless-stopped
+    restart: on-failure
     container_name: ${STAGE20_HOTSPOT_CONTAINER_NAME:-stage20-hotspot}
     depends_on:
       permissions-init:

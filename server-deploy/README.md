@@ -63,7 +63,6 @@ set_env() {
 
 set_env FREQTRADE_CONFIG config_binance_stage17_turbo_adaptive_scalp_20pair_1000u_dryrun.json
 set_env FREQTRADE_STRATEGY Intp20Stage17TurboAdaptiveScalpStrategy
-set_env PERMISSIONS_INIT_CONTAINER_NAME freqtrade-permissions-init-stage17
 set_env FREQTRADE_CONTAINER_NAME freqtrade-stage17
 set_env FREQUI_CONTAINER_NAME frequi-stage17
 
@@ -101,7 +100,6 @@ set_env() {
 
 set_env FREQTRADE_CONFIG config_binance_stage18_no_key_hotspot_20pair_1000u_dryrun.json
 set_env FREQTRADE_STRATEGY Intp20Stage18NoKeyHotspotStrategy
-set_env PERMISSIONS_INIT_CONTAINER_NAME freqtrade-permissions-init-stage18
 set_env FREQTRADE_CONTAINER_NAME freqtrade-stage18
 set_env FREQUI_CONTAINER_NAME frequi-stage18
 set_env STAGE18_HOTSPOT_CONTAINER_NAME stage18-hotspot
@@ -150,7 +148,6 @@ set_env() {
 
 set_env FREQTRADE_CONFIG config_binance_stage19_aggressive_newcoin_38pair_1000u_dryrun.json
 set_env FREQTRADE_STRATEGY Intp20Stage19AggressiveNewcoinStrategy
-set_env PERMISSIONS_INIT_CONTAINER_NAME freqtrade-permissions-init-stage19
 set_env FREQTRADE_CONTAINER_NAME freqtrade-stage19
 set_env FREQUI_CONTAINER_NAME frequi-stage19
 set_env STAGE19_HOTSPOT_CONTAINER_NAME stage19-hotspot
@@ -192,6 +189,83 @@ freqtrade backtesting \
 
 Stage20 是独立策略，不覆盖 Stage19。它仍然使用 38 对 Binance U 本位合约、1m 周期、1000 USDT 模拟本金、单笔 90 USDT、最多 10 个同时持仓，手续费按单边 0.05% 写入配置。Stage20 的新增学习层不按币种或月份拟合：短空和 pull 学习入口默认只观察不实盘，当前只允许通过快慢滚动记忆、胜率和 regime 过滤的动量多头学习入口参与。
 
+### 并行部署 Stage20，不影响当前模拟盘
+
+当前服务器仓库路径为 `/data/apps/freqtrade` 时，用独立 compose 项目和独立部署目录运行 Stage20。这样不会重建现有 `server-deploy` 里的模拟盘，Stage20 会使用自己的数据库、容器名和 WebUI 端口。
+
+```bash
+cd /data/apps/freqtrade
+git pull --ff-only
+
+rsync -a --delete \
+  --exclude '.env' \
+  --exclude 'user_data/tradesv3.sqlite*' \
+  --exclude 'user_data/logs/*' \
+  server-deploy/ server-deploy-stage20/
+
+cd /data/apps/freqtrade/server-deploy-stage20
+cp -n /data/apps/freqtrade/server-deploy/.env .env 2>/dev/null || cp .env.example .env
+
+set_env() {
+  key="$1"
+  value="$2"
+  if grep -q "^${key}=" .env; then
+    sed -i "s|^${key}=.*|${key}=${value}|" .env
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> .env
+  fi
+}
+
+set_env FREQTRADE_IMAGE ghcr.io/sunlightcold/freqtrade:develop
+set_env FREQUI_IMAGE ghcr.io/sunlightcold/freqtrade-frequi-zh:develop
+set_env FREQTRADE_CONFIG config_binance_stage20_adaptive_regime_newcoin_38pair_1000u_dryrun.json
+set_env FREQTRADE_STRATEGY Intp20Stage20AdaptiveRegimeNewcoinStrategy
+set_env FREQTRADE_CONTAINER_NAME freqtrade-stage20
+set_env FREQUI_CONTAINER_NAME frequi-stage20
+set_env STAGE20_HOTSPOT_CONTAINER_NAME stage20-hotspot-parallel
+set_env STAGE20_HOTSPOT_INTERVAL_SECONDS 240
+set_env STAGE20_HOTSPOT_TIMEOUT_SECONDS 8
+set_env FREQTRADE_API_BIND 127.0.0.1
+set_env FREQTRADE_API_PORT 18080
+set_env FREQUI_BIND 0.0.0.0
+set_env FREQUI_PORT 18081
+set_env FREQTRADE_EXCHANGE_KEY ""
+set_env FREQTRADE_EXCHANGE_SECRET ""
+
+docker compose -p freqtrade-stage20 --profile stage20 pull
+docker compose -p freqtrade-stage20 --profile stage20 up -d --remove-orphans
+docker compose -p freqtrade-stage20 --profile stage20 ps
+```
+
+Stage20 WebUI:
+
+```text
+http://服务器IP:18081
+```
+
+登录页填写：
+
+```text
+Bot Name: freqtrade
+API Url: http://服务器IP:18081
+Username: .env 里的 FREQTRADE_API_USERNAME
+Password: .env 里的 FREQTRADE_API_PASSWORD
+```
+
+如果只重启 Stage20，不影响原策略：
+
+```bash
+cd /data/apps/freqtrade/server-deploy-stage20
+docker compose -p freqtrade-stage20 --profile stage20 up -d
+```
+
+停掉 Stage20，也不影响原策略：
+
+```bash
+cd /data/apps/freqtrade/server-deploy-stage20
+docker compose -p freqtrade-stage20 --profile stage20 down
+```
+
 ```bash
 cd /path/to/freqtrade/server-deploy
 docker compose --profile stage20 down
@@ -215,7 +289,6 @@ set_env() {
 
 set_env FREQTRADE_CONFIG config_binance_stage20_adaptive_regime_newcoin_38pair_1000u_dryrun.json
 set_env FREQTRADE_STRATEGY Intp20Stage20AdaptiveRegimeNewcoinStrategy
-set_env PERMISSIONS_INIT_CONTAINER_NAME freqtrade-permissions-init-stage20
 set_env FREQTRADE_CONTAINER_NAME freqtrade-stage20
 set_env FREQUI_CONTAINER_NAME frequi-stage20
 set_env STAGE20_HOTSPOT_CONTAINER_NAME stage20-hotspot

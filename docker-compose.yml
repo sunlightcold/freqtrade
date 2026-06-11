@@ -3,7 +3,6 @@ services:
   permissions-init:
     image: "${FREQTRADE_IMAGE:-ghcr.io/sunlightcold/freqtrade:develop}"
     pull_policy: always
-    container_name: ${PERMISSIONS_INIT_CONTAINER_NAME:-freqtrade-permissions-init}
     user: "0:0"
     volumes:
       - "./server-deploy/user_data:/freqtrade/user_data"
