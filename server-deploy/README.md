@@ -74,6 +74,55 @@ docker compose logs --tail=100 -f freqtrade
 
 Stage17 配置为 1000 USDT 模拟本金，单笔 90 USDT，最多 10 个同时持仓，手续费按单边 0.05% 写入配置。保持 `dry_run=true`，先看前向模拟盘表现。
 
+## 切换到 Stage18 无 Key 热点模拟盘
+
+Stage18 是独立策略，不覆盖 Stage17。热点采集器只使用公开接口，不需要 API key，且只写入本地 JSON 缓存；策略本身不会在下单流程里请求外部 API。
+
+```bash
+cd /path/to/freqtrade/server-deploy
+docker compose --profile stage18 down
+mkdir -p backups
+cp user_data/tradesv3.sqlite backups/tradesv3-before-stage18-$(date +%Y%m%d-%H%M%S).sqlite 2>/dev/null || true
+rm -f user_data/tradesv3.sqlite user_data/tradesv3.sqlite-shm user_data/tradesv3.sqlite-wal
+
+cd /path/to/freqtrade
+git pull --ff-only
+cd server-deploy
+
+set_env() {
+  key="$1"
+  value="$2"
+  if grep -q "^${key}=" .env; then
+    sed -i "s|^${key}=.*|${key}=${value}|" .env
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> .env
+  fi
+}
+
+set_env FREQTRADE_CONFIG config_binance_stage18_no_key_hotspot_20pair_1000u_dryrun.json
+set_env FREQTRADE_STRATEGY Intp20Stage18NoKeyHotspotStrategy
+set_env PERMISSIONS_INIT_CONTAINER_NAME freqtrade-permissions-init-stage18
+set_env FREQTRADE_CONTAINER_NAME freqtrade-stage18
+set_env FREQUI_CONTAINER_NAME frequi-stage18
+set_env STAGE18_HOTSPOT_CONTAINER_NAME stage18-hotspot
+set_env STAGE18_HOTSPOT_INTERVAL_SECONDS 300
+set_env STAGE18_HOTSPOT_TIMEOUT_SECONDS 8
+
+docker compose --profile stage18 pull
+docker compose --profile stage18 up -d
+docker compose logs --tail=100 -f stage18-hotspot
+docker compose logs --tail=100 -f freqtrade
+```
+
+如果只想先生成一次热点缓存做连通性测试：
+
+```bash
+docker compose --profile stage18 run --rm stage18-hotspot \
+  python /freqtrade/user_data/scripts/fetch_stage18_hotspot_cache.py \
+  --config /freqtrade/user_data/config_binance_stage18_no_key_hotspot_20pair_1000u_dryrun.json \
+  --output /freqtrade/user_data/hotspot/stage18_hotspot_cache.json
+```
+
 ## 镜像
 
 - Freqtrade 后端：`ghcr.io/sunlightcold/freqtrade:develop`
