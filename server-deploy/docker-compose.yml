@@ -18,7 +18,6 @@ services:
     image: "${FREQTRADE_IMAGE:-ghcr.io/sunlightcold/freqtrade:develop}"
     pull_policy: always
     restart: unless-stopped
-    container_name: ${FREQTRADE_CONTAINER_NAME:-freqtrade}
     depends_on:
       permissions-init:
         condition: service_completed_successfully
@@ -48,7 +47,6 @@ services:
     profiles: ["stage18"]
     pull_policy: always
     restart: on-failure
-    container_name: ${STAGE18_HOTSPOT_CONTAINER_NAME:-stage18-hotspot}
     depends_on:
       permissions-init:
         condition: service_completed_successfully
@@ -69,7 +67,6 @@ services:
     profiles: ["stage19"]
     pull_policy: always
     restart: on-failure
-    container_name: ${STAGE19_HOTSPOT_CONTAINER_NAME:-stage19-hotspot}
     depends_on:
       permissions-init:
         condition: service_completed_successfully
@@ -90,7 +87,6 @@ services:
     profiles: ["stage20"]
     pull_policy: always
     restart: on-failure
-    container_name: ${STAGE20_HOTSPOT_CONTAINER_NAME:-stage20-hotspot}
     depends_on:
       permissions-init:
         condition: service_completed_successfully
@@ -110,7 +106,6 @@ services:
     image: ${FREQUI_IMAGE:-ghcr.io/sunlightcold/freqtrade-frequi-zh:develop}
     pull_policy: always
     restart: unless-stopped
-    container_name: ${FREQUI_CONTAINER_NAME:-frequi}
     depends_on:
       freqtrade:
         condition: service_started

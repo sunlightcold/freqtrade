@@ -63,11 +63,8 @@ set_env() {
 
 set_env FREQTRADE_CONFIG config_binance_stage17_turbo_adaptive_scalp_20pair_1000u_dryrun.json
 set_env FREQTRADE_STRATEGY Intp20Stage17TurboAdaptiveScalpStrategy
-set_env FREQTRADE_CONTAINER_NAME freqtrade-stage17
-set_env FREQUI_CONTAINER_NAME frequi-stage17
-
 docker compose pull
-docker compose up -d
+docker compose up -d --remove-orphans
 docker compose logs --tail=100 -f freqtrade
 ```
 
@@ -100,9 +97,6 @@ set_env() {
 
 set_env FREQTRADE_CONFIG config_binance_stage18_no_key_hotspot_20pair_1000u_dryrun.json
 set_env FREQTRADE_STRATEGY Intp20Stage18NoKeyHotspotStrategy
-set_env FREQTRADE_CONTAINER_NAME freqtrade-stage18
-set_env FREQUI_CONTAINER_NAME frequi-stage18
-set_env STAGE18_HOTSPOT_CONTAINER_NAME stage18-hotspot
 set_env STAGE18_HOTSPOT_INTERVAL_SECONDS 300
 set_env STAGE18_HOTSPOT_TIMEOUT_SECONDS 8
 
@@ -148,9 +142,6 @@ set_env() {
 
 set_env FREQTRADE_CONFIG config_binance_stage19_aggressive_newcoin_38pair_1000u_dryrun.json
 set_env FREQTRADE_STRATEGY Intp20Stage19AggressiveNewcoinStrategy
-set_env FREQTRADE_CONTAINER_NAME freqtrade-stage19
-set_env FREQUI_CONTAINER_NAME frequi-stage19
-set_env STAGE19_HOTSPOT_CONTAINER_NAME stage19-hotspot
 set_env STAGE19_HOTSPOT_INTERVAL_SECONDS 240
 set_env STAGE19_HOTSPOT_TIMEOUT_SECONDS 8
 
@@ -220,9 +211,6 @@ set_env FREQTRADE_IMAGE ghcr.io/sunlightcold/freqtrade:develop
 set_env FREQUI_IMAGE ghcr.io/sunlightcold/freqtrade-frequi-zh:develop
 set_env FREQTRADE_CONFIG config_binance_stage20_adaptive_regime_newcoin_38pair_1000u_dryrun.json
 set_env FREQTRADE_STRATEGY Intp20Stage20AdaptiveRegimeNewcoinStrategy
-set_env FREQTRADE_CONTAINER_NAME freqtrade-stage20
-set_env FREQUI_CONTAINER_NAME frequi-stage20
-set_env STAGE20_HOTSPOT_CONTAINER_NAME stage20-hotspot-parallel
 set_env STAGE20_HOTSPOT_INTERVAL_SECONDS 240
 set_env STAGE20_HOTSPOT_TIMEOUT_SECONDS 8
 set_env FREQTRADE_API_BIND 127.0.0.1
@@ -259,6 +247,21 @@ cd /data/apps/freqtrade/server-deploy-stage20
 docker compose -p freqtrade-stage20 --profile stage20 up -d
 ```
 
+如果旧版本 `.env` 里固定过容器名，可能出现 `frequi-stage20` / `freqtrade-stage20` / `freqtrade-permissions-init-stage20` 已存在的冲突。升级到新版 compose 后先清理旧容器名：
+
+```bash
+cd /data/apps/freqtrade/server-deploy-stage20
+
+docker rm -f frequi-stage20 freqtrade-stage20 freqtrade-permissions-init-stage20 stage20-hotspot-parallel 2>/dev/null || true
+
+sed -i '/^FREQTRADE_CONTAINER_NAME=/d' .env
+sed -i '/^FREQUI_CONTAINER_NAME=/d' .env
+sed -i '/^PERMISSIONS_INIT_CONTAINER_NAME=/d' .env
+sed -i '/^STAGE20_HOTSPOT_CONTAINER_NAME=/d' .env
+
+docker compose -p freqtrade-stage20 --profile stage20 up -d --remove-orphans
+```
+
 停掉 Stage20，也不影响原策略：
 
 ```bash
@@ -289,9 +292,6 @@ set_env() {
 
 set_env FREQTRADE_CONFIG config_binance_stage20_adaptive_regime_newcoin_38pair_1000u_dryrun.json
 set_env FREQTRADE_STRATEGY Intp20Stage20AdaptiveRegimeNewcoinStrategy
-set_env FREQTRADE_CONTAINER_NAME freqtrade-stage20
-set_env FREQUI_CONTAINER_NAME frequi-stage20
-set_env STAGE20_HOTSPOT_CONTAINER_NAME stage20-hotspot
 set_env STAGE20_HOTSPOT_INTERVAL_SECONDS 240
 set_env STAGE20_HOTSPOT_TIMEOUT_SECONDS 8
 
