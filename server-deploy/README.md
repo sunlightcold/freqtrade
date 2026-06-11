@@ -123,6 +123,71 @@ docker compose --profile stage18 run --rm stage18-hotspot \
   --output /freqtrade/user_data/hotspot/stage18_hotspot_cache.json
 ```
 
+## 切换到 Stage19 激进新币模拟盘
+
+Stage19 是独立策略，不覆盖 Stage17/Stage18。它使用 38 对合约扩展池，`startup_candle_count=240`，适合对新币/短历史 1m K 线做近期回测和前向模拟；风险预算更高，先保持 `dry_run=true`。
+
+```bash
+cd /path/to/freqtrade/server-deploy
+docker compose --profile stage19 down
+mkdir -p backups
+cp user_data/tradesv3.sqlite backups/tradesv3-before-stage19-$(date +%Y%m%d-%H%M%S).sqlite 2>/dev/null || true
+rm -f user_data/tradesv3.sqlite user_data/tradesv3.sqlite-shm user_data/tradesv3.sqlite-wal
+
+cd /path/to/freqtrade
+git pull --ff-only
+cd server-deploy
+
+set_env() {
+  key="$1"
+  value="$2"
+  if grep -q "^${key}=" .env; then
+    sed -i "s|^${key}=.*|${key}=${value}|" .env
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> .env
+  fi
+}
+
+set_env FREQTRADE_CONFIG config_binance_stage19_aggressive_newcoin_38pair_1000u_dryrun.json
+set_env FREQTRADE_STRATEGY Intp20Stage19AggressiveNewcoinStrategy
+set_env PERMISSIONS_INIT_CONTAINER_NAME freqtrade-permissions-init-stage19
+set_env FREQTRADE_CONTAINER_NAME freqtrade-stage19
+set_env FREQUI_CONTAINER_NAME frequi-stage19
+set_env STAGE19_HOTSPOT_CONTAINER_NAME stage19-hotspot
+set_env STAGE19_HOTSPOT_INTERVAL_SECONDS 240
+set_env STAGE19_HOTSPOT_TIMEOUT_SECONDS 8
+
+docker compose --profile stage19 pull
+docker compose --profile stage19 up -d
+docker compose logs --tail=100 -f stage19-hotspot
+docker compose logs --tail=100 -f freqtrade
+```
+
+如果只想先跑一次热点缓存连通性测试：
+
+```bash
+docker compose --profile stage19 run --rm stage19-hotspot \
+  python /freqtrade/user_data/scripts/fetch_stage18_hotspot_cache.py \
+  --config /freqtrade/user_data/config_binance_stage19_aggressive_newcoin_38pair_1000u_dryrun.json \
+  --output /freqtrade/user_data/hotspot/stage18_hotspot_cache.json
+```
+
+新增未在配置中的新币时，不需要长历史数据，但需要至少下载 240 根以上 1m K 线才能触发策略启动。回测示例：
+
+```bash
+freqtrade download-data \
+  --config user_data/config_binance_stage19_aggressive_newcoin_38pair_200u_dryrun.json \
+  --timeframes 1m \
+  --pairs NEWCOIN/USDT:USDT \
+  --timerange 20260601-
+
+freqtrade backtesting \
+  --config user_data/config_binance_stage19_aggressive_newcoin_38pair_200u_dryrun.json \
+  --strategy Intp20Stage19AggressiveNewcoinStrategy \
+  --pairs NEWCOIN/USDT:USDT \
+  --timerange 20260601-
+```
+
 ## 镜像
 
 - Freqtrade 后端：`ghcr.io/sunlightcold/freqtrade:develop`

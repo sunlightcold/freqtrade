@@ -3,15 +3,14 @@ from __future__ import annotations
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
-from pandas import DataFrame
-
 from Intp20Stage17AdaptiveScalpStrategy import Intp20Stage17TurboAdaptiveScalpStrategy
+from pandas import DataFrame
 
 
 class Intp20Stage18NoKeyHotspotStrategy(Intp20Stage17TurboAdaptiveScalpStrategy):
@@ -54,7 +53,10 @@ class Intp20Stage18NoKeyHotspotStrategy(Intp20Stage17TurboAdaptiveScalpStrategy)
     @classmethod
     def _load_hotspot_cache(cls) -> dict[str, Any]:
         now = time.time()
-        if cls._stage18_cache_data is not None and now - cls._stage18_cache_loaded_at < cls.hotspot_file_reload_seconds:
+        if (
+            cls._stage18_cache_data is not None
+            and now - cls._stage18_cache_loaded_at < cls.hotspot_file_reload_seconds
+        ):
             return cls._stage18_cache_data
 
         cls._stage18_cache_loaded_at = now
@@ -78,12 +80,14 @@ class Intp20Stage18NoKeyHotspotStrategy(Intp20Stage17TurboAdaptiveScalpStrategy)
             cache_time = datetime.fromisoformat(str(generated_at).replace("Z", "+00:00"))
         except ValueError:
             return {}, {}
-        age = datetime.now(timezone.utc) - cache_time
+        age = datetime.now(UTC) - cache_time
         if age.total_seconds() > cls.hotspot_cache_ttl_seconds:
             return {}, {}
-        pairs = data.get("pairs") if isinstance(data.get("pairs"), dict) else {}
+        pairs_data = data.get("pairs")
+        pairs = pairs_data if isinstance(pairs_data, dict) else {}
         pair_payload = pairs.get(pair, {})
-        global_payload = data.get("global") if isinstance(data.get("global"), dict) else {}
+        global_data = data.get("global")
+        global_payload = global_data if isinstance(global_data, dict) else {}
         return (
             pair_payload if isinstance(pair_payload, dict) else {},
             global_payload if isinstance(global_payload, dict) else {},
@@ -94,7 +98,9 @@ class Intp20Stage18NoKeyHotspotStrategy(Intp20Stage17TurboAdaptiveScalpStrategy)
 
         volume_15 = dataframe["volume"].rolling(15, min_periods=5).sum()
         volume_base = dataframe["volume"].rolling(240, min_periods=30).mean() * 15
-        volume_ratio = (volume_15 / volume_base.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan)
+        volume_ratio = (volume_15 / volume_base.replace(0, np.nan)).replace(
+            [np.inf, -np.inf], np.nan
+        )
 
         roc_15 = dataframe["close"] / dataframe["close"].shift(15) - 1
         roc_60 = dataframe["close"] / dataframe["close"].shift(60) - 1
@@ -138,8 +144,13 @@ class Intp20Stage18NoKeyHotspotStrategy(Intp20Stage17TurboAdaptiveScalpStrategy)
         long_block = cold_risk | ((risk > self.high_risk_score) & (bias < -0.45))
         short_block = cold_risk | ((risk > self.high_risk_score) & (bias > 0.45))
 
-        dataframe.loc[(dataframe["enter_long"] == 1) & long_block, ["enter_long", "enter_tag"]] = (0, None)
-        dataframe.loc[(dataframe["enter_short"] == 1) & short_block, ["enter_short", "enter_tag"]] = (0, None)
+        dataframe.loc[(dataframe["enter_long"] == 1) & long_block, ["enter_long", "enter_tag"]] = (
+            0,
+            None,
+        )
+        dataframe.loc[
+            (dataframe["enter_short"] == 1) & short_block, ["enter_short", "enter_tag"]
+        ] = (0, None)
         return dataframe
 
     def _live_cache_enabled(self) -> bool:
@@ -188,8 +199,14 @@ class Intp20Stage18NoKeyHotspotStrategy(Intp20Stage17TurboAdaptiveScalpStrategy)
             pair_payload, global_payload = self._fresh_cache_payload(pair)
             if pair_payload:
                 cache_hot = self._bounded(float(pair_payload.get("hot_score", scores["hot_score"])))
-                cache_risk = self._bounded(float(pair_payload.get("risk_score", scores["risk_score"])))
-                cache_bias = self._bounded(float(pair_payload.get("direction_bias", scores["direction_bias"])), -1.0, 1.0)
+                cache_risk = self._bounded(
+                    float(pair_payload.get("risk_score", scores["risk_score"]))
+                )
+                cache_bias = self._bounded(
+                    float(pair_payload.get("direction_bias", scores["direction_bias"])),
+                    -1.0,
+                    1.0,
+                )
                 scores["hot_score"] = max(scores["hot_score"], cache_hot)
                 scores["risk_score"] = max(scores["risk_score"], cache_risk)
                 if abs(cache_bias) > abs(scores["direction_bias"]):
@@ -237,7 +254,7 @@ class Intp20Stage18NoKeyHotspotStrategy(Intp20Stage17TurboAdaptiveScalpStrategy)
             return False
         return self._entry_allowed(side, self._latest_scores(pair, current_time))
 
-    def custom_stake_amount(
+    def custom_stake_amount(  # type: ignore[override]
         self,
         pair: str,
         current_time: datetime,

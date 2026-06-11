@@ -109,7 +109,7 @@ class Intp20Stage14CommunityBoostStrategy(Intp20Stage13Validated20Strategy):
             return False
         return True
 
-    def custom_stake_amount(
+    def custom_stake_amount(  # type: ignore[override]
         self,
         pair: str,
         current_time: datetime,
