@@ -86,6 +86,27 @@ services:
       --interval-seconds ${STAGE19_HOTSPOT_INTERVAL_SECONDS:-240}
       --timeout ${STAGE19_HOTSPOT_TIMEOUT_SECONDS:-8}
 
+  stage20-hotspot:
+    image: "${FREQTRADE_IMAGE:-ghcr.io/sunlightcold/freqtrade:develop}"
+    profiles: ["stage20"]
+    pull_policy: always
+    restart: unless-stopped
+    container_name: ${STAGE20_HOTSPOT_CONTAINER_NAME:-stage20-hotspot}
+    depends_on:
+      permissions-init:
+        condition: service_completed_successfully
+    volumes:
+      - "./user_data:/freqtrade/user_data"
+    entrypoint:
+      - "/bin/sh"
+      - "-ec"
+    command: >
+      python /freqtrade/user_data/scripts/fetch_stage18_hotspot_cache.py
+      --config /freqtrade/user_data/${FREQTRADE_CONFIG:-config_binance_stage20_adaptive_regime_newcoin_38pair_1000u_dryrun.json}
+      --output /freqtrade/user_data/hotspot/stage18_hotspot_cache.json
+      --interval-seconds ${STAGE20_HOTSPOT_INTERVAL_SECONDS:-240}
+      --timeout ${STAGE20_HOTSPOT_TIMEOUT_SECONDS:-8}
+
   frequi:
     image: ${FREQUI_IMAGE:-ghcr.io/sunlightcold/freqtrade-frequi-zh:develop}
     pull_policy: always

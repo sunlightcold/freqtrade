@@ -188,6 +188,71 @@ freqtrade backtesting \
   --timerange 20260601-
 ```
 
+## 切换到 Stage20 自适应学习模拟盘
+
+Stage20 是独立策略，不覆盖 Stage19。它仍然使用 38 对 Binance U 本位合约、1m 周期、1000 USDT 模拟本金、单笔 90 USDT、最多 10 个同时持仓，手续费按单边 0.05% 写入配置。Stage20 的新增学习层不按币种或月份拟合：短空和 pull 学习入口默认只观察不实盘，当前只允许通过快慢滚动记忆、胜率和 regime 过滤的动量多头学习入口参与。
+
+```bash
+cd /path/to/freqtrade/server-deploy
+docker compose --profile stage20 down
+mkdir -p backups
+cp user_data/tradesv3.sqlite backups/tradesv3-before-stage20-$(date +%Y%m%d-%H%M%S).sqlite 2>/dev/null || true
+rm -f user_data/tradesv3.sqlite user_data/tradesv3.sqlite-shm user_data/tradesv3.sqlite-wal
+
+cd /path/to/freqtrade
+git pull --ff-only
+cd server-deploy
+
+set_env() {
+  key="$1"
+  value="$2"
+  if grep -q "^${key}=" .env; then
+    sed -i "s|^${key}=.*|${key}=${value}|" .env
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> .env
+  fi
+}
+
+set_env FREQTRADE_CONFIG config_binance_stage20_adaptive_regime_newcoin_38pair_1000u_dryrun.json
+set_env FREQTRADE_STRATEGY Intp20Stage20AdaptiveRegimeNewcoinStrategy
+set_env PERMISSIONS_INIT_CONTAINER_NAME freqtrade-permissions-init-stage20
+set_env FREQTRADE_CONTAINER_NAME freqtrade-stage20
+set_env FREQUI_CONTAINER_NAME frequi-stage20
+set_env STAGE20_HOTSPOT_CONTAINER_NAME stage20-hotspot
+set_env STAGE20_HOTSPOT_INTERVAL_SECONDS 240
+set_env STAGE20_HOTSPOT_TIMEOUT_SECONDS 8
+
+docker compose --profile stage20 pull
+docker compose --profile stage20 up -d
+docker compose logs --tail=100 -f stage20-hotspot
+docker compose logs --tail=100 -f freqtrade
+```
+
+如果只想先跑一次热点缓存连通性测试：
+
+```bash
+docker compose --profile stage20 run --rm stage20-hotspot \
+  python /freqtrade/user_data/scripts/fetch_stage18_hotspot_cache.py \
+  --config /freqtrade/user_data/config_binance_stage20_adaptive_regime_newcoin_38pair_1000u_dryrun.json \
+  --output /freqtrade/user_data/hotspot/stage18_hotspot_cache.json
+```
+
+新增未在配置中的新币时，仍然只需要足够短历史启动策略；至少下载 240 根以上 1m K 线。回测示例：
+
+```bash
+freqtrade download-data \
+  --config user_data/config_binance_stage20_adaptive_regime_newcoin_38pair_200u_dryrun.json \
+  --timeframes 1m \
+  --pairs NEWCOIN/USDT:USDT \
+  --timerange 20260601-
+
+freqtrade backtesting \
+  --config user_data/config_binance_stage20_adaptive_regime_newcoin_38pair_200u_dryrun.json \
+  --strategy Intp20Stage20AdaptiveRegimeNewcoinStrategy \
+  --pairs NEWCOIN/USDT:USDT \
+  --timerange 20260601-
+```
+
 ## 镜像
 
 - Freqtrade 后端：`ghcr.io/sunlightcold/freqtrade:develop`
