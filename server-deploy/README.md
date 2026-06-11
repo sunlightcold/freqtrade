@@ -36,6 +36,44 @@ docker compose up -d
 docker compose ps -a
 ```
 
+## 切换到 Stage17 1000U 模拟盘
+
+服务器只需要拉取仓库并用命令更新 `.env`，不需要手动上传文件：
+
+```bash
+cd /path/to/freqtrade/server-deploy
+docker compose down
+mkdir -p backups
+cp user_data/tradesv3.sqlite backups/tradesv3-before-stage17-$(date +%Y%m%d-%H%M%S).sqlite 2>/dev/null || true
+rm -f user_data/tradesv3.sqlite user_data/tradesv3.sqlite-shm user_data/tradesv3.sqlite-wal
+
+cd /path/to/freqtrade
+git pull --ff-only
+cd server-deploy
+
+set_env() {
+  key="$1"
+  value="$2"
+  if grep -q "^${key}=" .env; then
+    sed -i "s|^${key}=.*|${key}=${value}|" .env
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> .env
+  fi
+}
+
+set_env FREQTRADE_CONFIG config_binance_stage17_turbo_adaptive_scalp_20pair_1000u_dryrun.json
+set_env FREQTRADE_STRATEGY Intp20Stage17TurboAdaptiveScalpStrategy
+set_env PERMISSIONS_INIT_CONTAINER_NAME freqtrade-permissions-init-stage17
+set_env FREQTRADE_CONTAINER_NAME freqtrade-stage17
+set_env FREQUI_CONTAINER_NAME frequi-stage17
+
+docker compose pull
+docker compose up -d
+docker compose logs --tail=100 -f freqtrade
+```
+
+Stage17 配置为 1000 USDT 模拟本金，单笔 90 USDT，最多 10 个同时持仓，手续费按单边 0.05% 写入配置。保持 `dry_run=true`，先看前向模拟盘表现。
+
 ## 镜像
 
 - Freqtrade 后端：`ghcr.io/sunlightcold/freqtrade:develop`

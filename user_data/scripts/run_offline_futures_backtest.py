@@ -203,6 +203,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stake-amount", default=None)
     parser.add_argument("--max-open-trades", type=int, default=None)
     parser.add_argument("--dry-run-wallet", default=None)
+    parser.add_argument(
+        "--fee",
+        type=float,
+        default=None,
+        help="Override one-side trading fee, e.g. 0.001 for 0.10% per entry/exit side.",
+    )
     parser.add_argument("--export", default="trades")
     parser.add_argument("--breakdown", nargs="+", default=["month", "year"])
     parser.add_argument("--cache", default="none")
@@ -247,6 +253,8 @@ def main() -> None:
 
     parsed = Arguments(cli_args).get_parsed_arg()
     config = setup_optimize_configuration(parsed, RunMode.BACKTEST)
+    if args.fee is not None:
+        config["fee"] = args.fee
     if args.pairs:
         config["exchange"]["pair_whitelist"] = args.pairs
     exchange = inject_offline_markets(config)
