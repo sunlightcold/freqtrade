@@ -370,6 +370,94 @@ freqtrade backtesting \
   --timerange 20260601-
 ```
 
+## 部署 Stage21 双向高频新币模拟盘
+
+Stage21 是独立策略，不覆盖 Stage20。它使用 93 对 Binance U 本位合约、1m 周期、1000 USDT 模拟本金、单笔 70 USDT、最多 14 个同时持仓，手续费仍按单边 taker 0.05% 写入配置。币池扩展到多空高频和热点新币，包含 `PUMP/USDT:USDT`、`MERL/USDT:USDT`、`WIF/USDT:USDT`、`1000BONK/USDT:USDT`、`1000FLOKI/USDT:USDT`、`POPCAT/USDT:USDT`、`PNUT/USDT:USDT`、`FARTCOIN/USDT:USDT`、`KAITO/USDT:USDT`、`AIXBT/USDT:USDT`、`VIRTUAL/USDT:USDT`、`BERA/USDT:USDT`、`SHELL/USDT:USDT` 等。
+
+当前服务器仓库路径为 `/data/apps/freqtrade` 时，建议用独立目录和独立 compose 项目运行：
+
+```bash
+cd /data/apps/freqtrade
+git pull --ff-only
+
+rsync -a --delete \
+  --exclude '.env' \
+  --exclude 'user_data/tradesv3.sqlite*' \
+  --exclude 'user_data/logs/*' \
+  server-deploy/ server-deploy-stage21/
+
+cd /data/apps/freqtrade/server-deploy-stage21
+cp -n /data/apps/freqtrade/server-deploy/.env .env 2>/dev/null || cp .env.example .env
+
+set_env() {
+  key="$1"
+  value="$2"
+  if grep -q "^${key}=" .env; then
+    sed -i "s|^${key}=.*|${key}=${value}|" .env
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> .env
+  fi
+}
+
+set_env FREQTRADE_IMAGE ghcr.io/sunlightcold/freqtrade:develop
+set_env FREQTRADE_CONFIG config_binance_stage21_dual_hf_newcoin_93pair_1000u_dryrun.json
+set_env FREQTRADE_STRATEGY Intp20Stage21DualHfNewcoinStrategy
+set_env STAGE21_HOTSPOT_INTERVAL_SECONDS 180
+set_env STAGE21_HOTSPOT_TIMEOUT_SECONDS 8
+set_env FREQTRADE_API_BIND 0.0.0.0
+set_env FREQTRADE_API_PORT 18082
+set_env FREQTRADE_EXCHANGE_KEY ""
+set_env FREQTRADE_EXCHANGE_SECRET ""
+set_env FREQTRADE_EXTRA_CONFIG_ARGS "--config /freqtrade/user_data/config_server_api_override.json"
+
+SERVER_ORIGIN="http://82.158.225.90:8081"
+python3 - "$SERVER_ORIGIN" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+origin = sys.argv[1]
+path = Path("user_data/config_server_api_override.json")
+example = Path("user_data/config_server_api_override.example.json")
+data = json.loads(
+    path.read_text(encoding="utf-8")
+    if path.exists()
+    else example.read_text(encoding="utf-8")
+)
+api_server = data.setdefault("api_server", {})
+api_server["CORS_origins"] = [origin]
+path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PY
+
+docker compose -p freqtrade-stage21 --profile stage21 pull
+docker compose -p freqtrade-stage21 --profile stage21 up -d --no-deps freqtrade stage21-hotspot
+docker compose -p freqtrade-stage21 --profile stage21 ps
+```
+
+在现有 FreqUI 里添加一个 Bot：
+
+```text
+Bot Name: stage21
+API Url: http://服务器IP:18082
+Username: .env 里的 FREQTRADE_API_USERNAME
+Password: .env 里的 FREQTRADE_API_PASSWORD
+```
+
+只看 Stage21 日志：
+
+```bash
+cd /data/apps/freqtrade/server-deploy-stage21
+docker compose -p freqtrade-stage21 logs --tail=200 --no-color freqtrade
+docker compose -p freqtrade-stage21 logs --tail=100 --no-color stage21-hotspot
+```
+
+停掉 Stage21，不影响 Stage20 或原模拟盘：
+
+```bash
+cd /data/apps/freqtrade/server-deploy-stage21
+docker compose -p freqtrade-stage21 down
+```
+
 ## 镜像
 
 - Freqtrade 后端：`ghcr.io/sunlightcold/freqtrade:develop`
