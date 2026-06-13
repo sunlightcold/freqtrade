@@ -739,7 +739,7 @@ path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding=
 PY
 
 docker compose -p freqtrade-stage24 --profile stage24 pull
-docker compose -p freqtrade-stage24 --profile stage24 up -d --no-deps freqtrade stage24-hotspot
+docker compose -p freqtrade-stage24 --profile stage24 up -d --force-recreate --no-deps freqtrade stage24-hotspot
 docker compose -p freqtrade-stage24 --profile stage24 ps
 ```
 
