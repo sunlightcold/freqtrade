@@ -666,6 +666,122 @@ docker compose -p freqtrade-stage23 down
 .\.venv\Scripts\python.exe user_data\scripts\run_offline_futures_backtest.py -c user_data\config_binance_stage23_aggressive_generic_pulse_93pair_1000u_dryrun.json --strategy Intp20Stage23AggressiveGenericPulseStrategy --timerange 20250101-20250201 --fee 0.0005 --no-timeframe-detail --cache none
 ```
 
+## 部署 Stage24 稳健脉冲模拟盘
+
+Stage24 是 Stage23 的稳健改进版，不覆盖已有模拟盘。2023-06 到 2026-06 的月度分段回测显示，Stage23 最大结构性拖累来自通用 `s21_momo_s_*` 短动量入口；Stage24 保留 93 币组合和多空交易，但屏蔽长期不稳的通用学习入口，减少弱市场阶段的手续费和噪声磨损。
+
+长样本月度分段结果，手续费按单边 `0.0005` 计算：
+
+```text
+2023-06~2024-01: +8.02%, 709 trades, max monthly DD 7.92%
+2024:            +88.72%, 1716 trades, max monthly DD 9.40%
+2025:           +150.26%, 1380 trades, max monthly DD 9.09%
+2026-01~06-12:  +61.92%, 472 trades, max monthly DD 4.59%
+```
+
+这些是历史回测结果，不是实盘收益承诺。Stage24 的优先级高于 Stage23：它牺牲了一点 2026 强势期收益，但明显改善 2024/2025 的弱窗口表现。
+
+### 独立部署
+
+当前服务器仓库路径为 `/data/apps/freqtrade` 时：
+
+```bash
+cd /data/apps/freqtrade
+git pull --ff-only
+
+rsync -a --delete \
+  --exclude '.env' \
+  --exclude 'user_data/tradesv3.sqlite*' \
+  --exclude 'user_data/logs/*' \
+  server-deploy/ server-deploy-stage24/
+
+cd /data/apps/freqtrade/server-deploy-stage24
+cp -n /data/apps/freqtrade/server-deploy/.env .env 2>/dev/null || cp .env.example .env
+
+set_env() {
+  key="$1"
+  value="$2"
+  if grep -q "^${key}=" .env; then
+    sed -i "s|^${key}=.*|${key}=${value}|" .env
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> .env
+  fi
+}
+
+set_env FREQTRADE_IMAGE ghcr.io/sunlightcold/freqtrade:develop
+set_env FREQTRADE_CONFIG config_binance_stage24_robust_pulse_93pair_1000u_dryrun.json
+set_env FREQTRADE_STRATEGY Intp20Stage24RobustPulseStrategy
+set_env STAGE24_HOTSPOT_INTERVAL_SECONDS 180
+set_env STAGE24_HOTSPOT_TIMEOUT_SECONDS 8
+set_env FREQTRADE_API_BIND 0.0.0.0
+set_env FREQTRADE_API_PORT 18085
+set_env FREQTRADE_EXCHANGE_KEY ""
+set_env FREQTRADE_EXCHANGE_SECRET ""
+set_env FREQTRADE_EXTRA_CONFIG_ARGS "--config /freqtrade/user_data/config_server_api_override.json"
+
+SERVER_ORIGIN="http://82.158.225.90:8081"
+python3 - "$SERVER_ORIGIN" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+origin = sys.argv[1]
+path = Path("user_data/config_server_api_override.json")
+example = Path("user_data/config_server_api_override.example.json")
+data = json.loads(
+    path.read_text(encoding="utf-8")
+    if path.exists()
+    else example.read_text(encoding="utf-8")
+)
+api_server = data.setdefault("api_server", {})
+api_server["CORS_origins"] = [origin]
+path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PY
+
+docker compose -p freqtrade-stage24 --profile stage24 pull
+docker compose -p freqtrade-stage24 --profile stage24 up -d --no-deps freqtrade stage24-hotspot
+docker compose -p freqtrade-stage24 --profile stage24 ps
+```
+
+在现有 FreqUI 里添加一个 Bot：
+
+```text
+Bot Name: stage24
+API Url: http://服务器IP:18085
+Username: .env 里的 FREQTRADE_API_USERNAME
+Password: .env 里的 FREQTRADE_API_PASSWORD
+```
+
+只看 Stage24 日志：
+
+```bash
+cd /data/apps/freqtrade/server-deploy-stage24
+docker compose -p freqtrade-stage24 logs --tail=200 --no-color freqtrade
+docker compose -p freqtrade-stage24 logs --tail=100 --no-color stage24-hotspot
+```
+
+停掉 Stage24，不影响其它模拟盘：
+
+```bash
+cd /data/apps/freqtrade/server-deploy-stage24
+docker compose -p freqtrade-stage24 down
+```
+
+### 长时间分段回测
+
+本地或服务器都不要直接跑 `93 币 + 1m + 全年`。使用分段脚本逐月跑，结果会写入 `user_data/backtest_results/split/`：
+
+```bash
+python user_data/scripts/run_split_futures_backtests.py \
+  -c user_data/config_binance_stage24_robust_pulse_93pair_1000u_dryrun.json \
+  --strategy Intp20Stage24RobustPulseStrategy \
+  --start 20250101 \
+  --end 20260101 \
+  --months-per-window 1 \
+  --fee 0.0005 \
+  --no-timeframe-detail
+```
+
 ## 镜像
 
 - Freqtrade 后端：`ghcr.io/sunlightcold/freqtrade:develop`
