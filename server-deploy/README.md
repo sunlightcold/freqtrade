@@ -566,6 +566,106 @@ cd /data/apps/freqtrade/server-deploy-stage22
 docker compose -p freqtrade-stage22 down
 ```
 
+## 部署 Stage23 激进通用脉冲模拟盘
+
+Stage23 是 Stage21 的激进防守版，不覆盖 Stage20/Stage21/Stage22。它保留 93 对 Binance U 本位合约、1m 周期、1000 USDT 模拟本金、最多 14 个同时持仓、单边手续费 0.05%，同时屏蔽 Stage21 里回测拖累最大的通用追多和松散回调入口，只保留更有短线胜率的组合入口和通用短动量。这个版本目标是提高短期交易密度和收益弹性，但仍然需要先 dry-run 前向观察。
+
+已做的离线验证使用 2026-01-01 到 2026-06-12 的本地 1m futures K 线，手续费按单边 `0.0005` 计算。完整样本约 `+54.14%`，前半段约 `+27.89%`，后半段约 `+26.21%`。这些不是收益承诺，只用于说明它没有靠单一月份或单一币种拟合。
+
+### 独立部署
+
+当前服务器仓库路径为 `/data/apps/freqtrade` 时：
+
+```bash
+cd /data/apps/freqtrade
+git pull --ff-only
+
+rsync -a --delete \
+  --exclude '.env' \
+  --exclude 'user_data/tradesv3.sqlite*' \
+  --exclude 'user_data/logs/*' \
+  server-deploy/ server-deploy-stage23/
+
+cd /data/apps/freqtrade/server-deploy-stage23
+cp -n /data/apps/freqtrade/server-deploy/.env .env 2>/dev/null || cp .env.example .env
+
+set_env() {
+  key="$1"
+  value="$2"
+  if grep -q "^${key}=" .env; then
+    sed -i "s|^${key}=.*|${key}=${value}|" .env
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> .env
+  fi
+}
+
+set_env FREQTRADE_IMAGE ghcr.io/sunlightcold/freqtrade:develop
+set_env FREQTRADE_CONFIG config_binance_stage23_aggressive_generic_pulse_93pair_1000u_dryrun.json
+set_env FREQTRADE_STRATEGY Intp20Stage23AggressiveGenericPulseStrategy
+set_env STAGE23_HOTSPOT_INTERVAL_SECONDS 180
+set_env STAGE23_HOTSPOT_TIMEOUT_SECONDS 8
+set_env FREQTRADE_API_BIND 0.0.0.0
+set_env FREQTRADE_API_PORT 18084
+set_env FREQTRADE_EXCHANGE_KEY ""
+set_env FREQTRADE_EXCHANGE_SECRET ""
+set_env FREQTRADE_EXTRA_CONFIG_ARGS "--config /freqtrade/user_data/config_server_api_override.json"
+
+SERVER_ORIGIN="http://82.158.225.90:8081"
+python3 - "$SERVER_ORIGIN" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+origin = sys.argv[1]
+path = Path("user_data/config_server_api_override.json")
+example = Path("user_data/config_server_api_override.example.json")
+data = json.loads(
+    path.read_text(encoding="utf-8")
+    if path.exists()
+    else example.read_text(encoding="utf-8")
+)
+api_server = data.setdefault("api_server", {})
+api_server["CORS_origins"] = [origin]
+path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PY
+
+docker compose -p freqtrade-stage23 --profile stage23 pull
+docker compose -p freqtrade-stage23 --profile stage23 up -d --no-deps freqtrade stage23-hotspot
+docker compose -p freqtrade-stage23 --profile stage23 ps
+```
+
+在现有 FreqUI 里添加一个 Bot：
+
+```text
+Bot Name: stage23
+API Url: http://服务器IP:18084
+Username: .env 里的 FREQTRADE_API_USERNAME
+Password: .env 里的 FREQTRADE_API_PASSWORD
+```
+
+只看 Stage23 日志：
+
+```bash
+cd /data/apps/freqtrade/server-deploy-stage23
+docker compose -p freqtrade-stage23 logs --tail=200 --no-color freqtrade
+docker compose -p freqtrade-stage23 logs --tail=100 --no-color stage23-hotspot
+```
+
+停掉 Stage23，不影响其它模拟盘：
+
+```bash
+cd /data/apps/freqtrade/server-deploy-stage23
+docker compose -p freqtrade-stage23 down
+```
+
+### 回测内存注意
+
+不要直接跑 `93 个币种 + 1m + 全年`，32GB 内存很容易被 Pandas 指标列和 Freqtrade 回测缓存打满。2025 验证建议按月或两个月切片跑，或者先缩小到核心币种池：
+
+```bash
+.\.venv\Scripts\python.exe user_data\scripts\run_offline_futures_backtest.py -c user_data\config_binance_stage23_aggressive_generic_pulse_93pair_1000u_dryrun.json --strategy Intp20Stage23AggressiveGenericPulseStrategy --timerange 20250101-20250201 --fee 0.0005 --no-timeframe-detail --cache none
+```
+
 ## 镜像
 
 - Freqtrade 后端：`ghcr.io/sunlightcold/freqtrade:develop`

@@ -388,67 +388,81 @@ class Intp20Stage20AdaptiveRegimeNewcoinStrategy(Intp20Stage19AggressiveNewcoinS
             self.stage20_memory_window,
         )
 
-        dataframe["stage20_momo_edge_long"] = long_edge_momo
-        dataframe["stage20_momo_edge_short"] = short_edge_momo
-        dataframe["stage20_pull_edge_long"] = long_edge_pull
-        dataframe["stage20_pull_edge_short"] = short_edge_pull
-        dataframe["stage20_momo_edge_long_slow"] = long_edge_momo_slow
-        dataframe["stage20_momo_edge_short_slow"] = short_edge_momo_slow
-        dataframe["stage20_pull_edge_long_slow"] = long_edge_pull_slow
-        dataframe["stage20_pull_edge_short_slow"] = short_edge_pull_slow
-        dataframe["stage20_momo_count_long"] = long_count_momo
-        dataframe["stage20_momo_count_short"] = short_count_momo
-        dataframe["stage20_pull_count_long"] = long_count_pull
-        dataframe["stage20_pull_count_short"] = short_count_pull
-        dataframe["stage20_momo_count_long_slow"] = long_count_momo_slow
-        dataframe["stage20_momo_count_short_slow"] = short_count_momo_slow
-        dataframe["stage20_pull_count_long_slow"] = long_count_pull_slow
-        dataframe["stage20_pull_count_short_slow"] = short_count_pull_slow
-        dataframe["stage20_momo_win_long"] = long_win_momo
-        dataframe["stage20_momo_win_short"] = short_win_momo
-        dataframe["stage20_pull_win_long"] = long_win_pull
-        dataframe["stage20_pull_win_short"] = short_win_pull
-        dataframe["stage20_edge_long"] = pd.concat([long_edge_momo, long_edge_pull], axis=1).max(
-            axis=1,
-        )
-        dataframe["stage20_edge_short"] = pd.concat([short_edge_momo, short_edge_pull], axis=1).max(
-            axis=1,
-        )
-        dataframe["stage20_edge_long_slow"] = pd.concat(
+        stage20_edge_long = pd.concat([long_edge_momo, long_edge_pull], axis=1).max(axis=1)
+        stage20_edge_short = pd.concat([short_edge_momo, short_edge_pull], axis=1).max(axis=1)
+        stage20_edge_long_slow = pd.concat(
             [long_edge_momo_slow, long_edge_pull_slow],
             axis=1,
         ).max(axis=1)
-        dataframe["stage20_edge_short_slow"] = pd.concat(
+        stage20_edge_short_slow = pd.concat(
             [short_edge_momo_slow, short_edge_pull_slow],
             axis=1,
         ).max(axis=1)
-        dataframe["stage20_winrate_long"] = pd.concat([long_win_momo, long_win_pull], axis=1).max(
-            axis=1,
-        )
-        dataframe["stage20_winrate_short"] = pd.concat(
+        stage20_winrate_long = pd.concat([long_win_momo, long_win_pull], axis=1).max(axis=1)
+        stage20_winrate_short = pd.concat(
             [short_win_momo, short_win_pull],
             axis=1,
         ).max(axis=1)
-        dataframe["stage20_memory_long_count"] = pd.concat(
+        stage20_memory_long_count = pd.concat(
             [long_count_momo, long_count_pull],
             axis=1,
         ).max(axis=1)
-        dataframe["stage20_memory_short_count"] = pd.concat(
+        stage20_memory_short_count = pd.concat(
             [short_count_momo, short_count_pull],
             axis=1,
         ).max(axis=1)
 
+        dataframe = pd.concat(
+            [
+                dataframe,
+                DataFrame(
+                    {
+                        "stage20_momo_edge_long": long_edge_momo,
+                        "stage20_momo_edge_short": short_edge_momo,
+                        "stage20_pull_edge_long": long_edge_pull,
+                        "stage20_pull_edge_short": short_edge_pull,
+                        "stage20_momo_edge_long_slow": long_edge_momo_slow,
+                        "stage20_momo_edge_short_slow": short_edge_momo_slow,
+                        "stage20_pull_edge_long_slow": long_edge_pull_slow,
+                        "stage20_pull_edge_short_slow": short_edge_pull_slow,
+                        "stage20_momo_count_long": long_count_momo,
+                        "stage20_momo_count_short": short_count_momo,
+                        "stage20_pull_count_long": long_count_pull,
+                        "stage20_pull_count_short": short_count_pull,
+                        "stage20_momo_count_long_slow": long_count_momo_slow,
+                        "stage20_momo_count_short_slow": short_count_momo_slow,
+                        "stage20_pull_count_long_slow": long_count_pull_slow,
+                        "stage20_pull_count_short_slow": short_count_pull_slow,
+                        "stage20_momo_win_long": long_win_momo,
+                        "stage20_momo_win_short": short_win_momo,
+                        "stage20_pull_win_long": long_win_pull,
+                        "stage20_pull_win_short": short_win_pull,
+                        "stage20_edge_long": stage20_edge_long,
+                        "stage20_edge_short": stage20_edge_short,
+                        "stage20_edge_long_slow": stage20_edge_long_slow,
+                        "stage20_edge_short_slow": stage20_edge_short_slow,
+                        "stage20_winrate_long": stage20_winrate_long,
+                        "stage20_winrate_short": stage20_winrate_short,
+                        "stage20_memory_long_count": stage20_memory_long_count,
+                        "stage20_memory_short_count": stage20_memory_short_count,
+                    },
+                    index=dataframe.index,
+                ),
+            ],
+            axis=1,
+        )
+
         long_edge_score = (
-            0.62 * self._score(dataframe["stage20_edge_long"].fillna(0.0), -0.0018, 0.0060)
+            0.62 * self._score(stage20_edge_long.fillna(0.0), -0.0018, 0.0060)
             + 0.25
-            * self._score(dataframe["stage20_edge_long_slow"].fillna(0.0), -0.0010, 0.0035)
-            + 0.13 * self._score(dataframe["stage20_winrate_long"].fillna(0.5), 0.46, 0.62)
+            * self._score(stage20_edge_long_slow.fillna(0.0), -0.0010, 0.0035)
+            + 0.13 * self._score(stage20_winrate_long.fillna(0.5), 0.46, 0.62)
         ).clip(0.0, 1.0)
         short_edge_score = (
-            0.62 * self._score(dataframe["stage20_edge_short"].fillna(0.0), -0.0018, 0.0060)
+            0.62 * self._score(stage20_edge_short.fillna(0.0), -0.0018, 0.0060)
             + 0.25
-            * self._score(dataframe["stage20_edge_short_slow"].fillna(0.0), -0.0010, 0.0035)
-            + 0.13 * self._score(dataframe["stage20_winrate_short"].fillna(0.5), 0.46, 0.62)
+            * self._score(stage20_edge_short_slow.fillna(0.0), -0.0010, 0.0035)
+            + 0.13 * self._score(stage20_winrate_short.fillna(0.5), 0.46, 0.62)
         ).clip(0.0, 1.0)
 
         slow_long_sample = pd.concat([long_count_momo_slow, long_count_pull_slow], axis=1).max(
@@ -457,7 +471,7 @@ class Intp20Stage20AdaptiveRegimeNewcoinStrategy(Intp20Stage19AggressiveNewcoinS
         slow_short_sample = pd.concat([short_count_momo_slow, short_count_pull_slow], axis=1).max(
             axis=1,
         )
-        long_sample_score = (dataframe["stage20_memory_long_count"].fillna(0.0) / 8.0).clip(
+        long_sample_score = (stage20_memory_long_count.fillna(0.0) / 8.0).clip(
             0.20,
             1.0,
         )
@@ -465,7 +479,7 @@ class Intp20Stage20AdaptiveRegimeNewcoinStrategy(Intp20Stage19AggressiveNewcoinS
             0.20,
             1.0,
         )
-        short_sample_score = (dataframe["stage20_memory_short_count"].fillna(0.0) / 8.0).clip(
+        short_sample_score = (stage20_memory_short_count.fillna(0.0) / 8.0).clip(
             0.20,
             1.0,
         )
@@ -486,7 +500,7 @@ class Intp20Stage20AdaptiveRegimeNewcoinStrategy(Intp20Stage19AggressiveNewcoinS
             - 0.22 * dataframe["stage20_btc_risk"].clip(0.0, 1.0)
         ).clip(0.35, 1.05)
 
-        dataframe["stage20_adaptive_long"] = (
+        stage20_adaptive_long = (
             (
                 0.34 * dataframe["stage20_trend_long"].fillna(0.0)
                 + 0.23 * dataframe["stage19_hot_score"].fillna(0.0)
@@ -497,7 +511,7 @@ class Intp20Stage20AdaptiveRegimeNewcoinStrategy(Intp20Stage19AggressiveNewcoinS
             )
             * market_long
         ).clip(0.0, 1.0)
-        dataframe["stage20_adaptive_short"] = (
+        stage20_adaptive_short = (
             (
                 0.34 * dataframe["stage20_trend_short"].fillna(0.0)
                 + 0.23 * dataframe["stage19_hot_score"].fillna(0.0)
@@ -509,39 +523,52 @@ class Intp20Stage20AdaptiveRegimeNewcoinStrategy(Intp20Stage19AggressiveNewcoinS
             * market_short
         ).clip(0.0, 1.0)
 
-        dataframe["stage20_raw_momo_long"] = raw_momo_long
-        dataframe["stage20_raw_momo_short"] = raw_momo_short
-        dataframe["stage20_raw_pull_long"] = raw_pull_long
-        dataframe["stage20_raw_pull_short"] = raw_pull_short
-        dataframe["stage20_momo_long_promoted"] = (
-            (long_count_momo >= 8)
-            & (long_edge_momo > 0.0012)
-            & ((long_count_momo_slow < 14) | (long_edge_momo_slow > -0.00015))
-            & (long_win_momo.fillna(0.5) >= 0.54)
-        )
-        dataframe["stage20_pull_long_promoted"] = (
-            bool(self.stage20_enable_pull_learning_entries)
-            & (long_count_pull >= 8)
-            & (long_edge_pull > 0.0010)
-            & ((long_count_pull_slow < 14) | (long_edge_pull_slow > -0.00015))
-            & (long_win_pull.fillna(0.5) >= 0.53)
-        )
-        dataframe["stage20_momo_short_promoted"] = (
-            bool(self.stage20_enable_short_learning_entries)
-            & (short_count_momo >= 12)
-            & (short_edge_momo > 0.0018)
-            & (short_count_momo_slow >= 18)
-            & (short_edge_momo_slow > 0.00025)
-            & (short_win_momo.fillna(0.5) >= 0.56)
-        )
-        dataframe["stage20_pull_short_promoted"] = (
-            bool(self.stage20_enable_short_learning_entries)
-            & bool(self.stage20_enable_pull_learning_entries)
-            & (short_count_pull >= 12)
-            & (short_edge_pull > 0.0018)
-            & (short_count_pull_slow >= 18)
-            & (short_edge_pull_slow > 0.00025)
-            & (short_win_pull.fillna(0.5) >= 0.56)
+        dataframe = pd.concat(
+            [
+                dataframe,
+                DataFrame(
+                    {
+                        "stage20_adaptive_long": stage20_adaptive_long,
+                        "stage20_adaptive_short": stage20_adaptive_short,
+                        "stage20_raw_momo_long": raw_momo_long,
+                        "stage20_raw_momo_short": raw_momo_short,
+                        "stage20_raw_pull_long": raw_pull_long,
+                        "stage20_raw_pull_short": raw_pull_short,
+                        "stage20_momo_long_promoted": (
+                            (long_count_momo >= 8)
+                            & (long_edge_momo > 0.0012)
+                            & ((long_count_momo_slow < 14) | (long_edge_momo_slow > -0.00015))
+                            & (long_win_momo.fillna(0.5) >= 0.54)
+                        ),
+                        "stage20_pull_long_promoted": (
+                            bool(self.stage20_enable_pull_learning_entries)
+                            & (long_count_pull >= 8)
+                            & (long_edge_pull > 0.0010)
+                            & ((long_count_pull_slow < 14) | (long_edge_pull_slow > -0.00015))
+                            & (long_win_pull.fillna(0.5) >= 0.53)
+                        ),
+                        "stage20_momo_short_promoted": (
+                            bool(self.stage20_enable_short_learning_entries)
+                            & (short_count_momo >= 12)
+                            & (short_edge_momo > 0.0018)
+                            & (short_count_momo_slow >= 18)
+                            & (short_edge_momo_slow > 0.00025)
+                            & (short_win_momo.fillna(0.5) >= 0.56)
+                        ),
+                        "stage20_pull_short_promoted": (
+                            bool(self.stage20_enable_short_learning_entries)
+                            & bool(self.stage20_enable_pull_learning_entries)
+                            & (short_count_pull >= 12)
+                            & (short_edge_pull > 0.0018)
+                            & (short_count_pull_slow >= 18)
+                            & (short_edge_pull_slow > 0.00025)
+                            & (short_win_pull.fillna(0.5) >= 0.56)
+                        ),
+                    },
+                    index=dataframe.index,
+                ),
+            ],
+            axis=1,
         )
         return dataframe
 
