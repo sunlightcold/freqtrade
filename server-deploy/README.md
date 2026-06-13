@@ -458,6 +458,114 @@ cd /data/apps/freqtrade/server-deploy-stage21
 docker compose -p freqtrade-stage21 down
 ```
 
+## 部署 Stage22 高确定性新币脉冲模拟盘
+
+Stage22 是独立策略，不覆盖 Stage20/Stage21。它不是宽松刷单版：实测宽松 1m 高频在单边 0.05% taker 手续费下会被噪声和手续费磨损打穿。Stage22 改为只做高确定性新币脉冲，主要是带滚动 edge/胜率过滤的短线空头，少量强趋势多头观察入口。配置仍为 93 对 Binance U 本位合约、1m 周期、1000 USDT 模拟本金、单笔 60 USDT、最多 14 个同时持仓、单边手续费 0.05%。
+
+### 新币 K 线下载
+
+如果 `freqtrade download-data` 因为 Binance `exchangeInfo` 超时失败，可以用仓库内脚本从 Binance Vision 公共归档下载 futures 1m K 线，不需要 API key：
+
+```bash
+cd /data/apps/freqtrade/server-deploy-stage22
+
+docker compose -p freqtrade-stage22 run --rm --no-deps freqtrade \
+  python /freqtrade/user_data/scripts/download_binance_vision_futures_ohlcv.py \
+  --userdir /freqtrade/user_data \
+  --pairs BTC PUMP MERL KAITO AIXBT VIRTUAL BERA SHELL WIF 1000BONK 1000FLOKI POPCAT PNUT FARTCOIN \
+  --timeframes 1m \
+  --timerange 20260101- \
+  --max-concurrency 8
+```
+
+公共归档通常会延迟一天左右，所以最近一天缺失属于正常现象。
+
+### 独立部署
+
+当前服务器仓库路径为 `/data/apps/freqtrade` 时：
+
+```bash
+cd /data/apps/freqtrade
+git pull --ff-only
+
+rsync -a --delete \
+  --exclude '.env' \
+  --exclude 'user_data/tradesv3.sqlite*' \
+  --exclude 'user_data/logs/*' \
+  server-deploy/ server-deploy-stage22/
+
+cd /data/apps/freqtrade/server-deploy-stage22
+cp -n /data/apps/freqtrade/server-deploy/.env .env 2>/dev/null || cp .env.example .env
+
+set_env() {
+  key="$1"
+  value="$2"
+  if grep -q "^${key}=" .env; then
+    sed -i "s|^${key}=.*|${key}=${value}|" .env
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> .env
+  fi
+}
+
+set_env FREQTRADE_IMAGE ghcr.io/sunlightcold/freqtrade:develop
+set_env FREQTRADE_CONFIG config_binance_stage22_hot_newcoin_pulse_93pair_1000u_dryrun.json
+set_env FREQTRADE_STRATEGY Intp20Stage22HotNewcoinPulseStrategy
+set_env STAGE22_HOTSPOT_INTERVAL_SECONDS 180
+set_env STAGE22_HOTSPOT_TIMEOUT_SECONDS 8
+set_env FREQTRADE_API_BIND 0.0.0.0
+set_env FREQTRADE_API_PORT 18083
+set_env FREQTRADE_EXCHANGE_KEY ""
+set_env FREQTRADE_EXCHANGE_SECRET ""
+set_env FREQTRADE_EXTRA_CONFIG_ARGS "--config /freqtrade/user_data/config_server_api_override.json"
+
+SERVER_ORIGIN="http://82.158.225.90:8081"
+python3 - "$SERVER_ORIGIN" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+origin = sys.argv[1]
+path = Path("user_data/config_server_api_override.json")
+example = Path("user_data/config_server_api_override.example.json")
+data = json.loads(
+    path.read_text(encoding="utf-8")
+    if path.exists()
+    else example.read_text(encoding="utf-8")
+)
+api_server = data.setdefault("api_server", {})
+api_server["CORS_origins"] = [origin]
+path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PY
+
+docker compose -p freqtrade-stage22 --profile stage22 pull
+docker compose -p freqtrade-stage22 --profile stage22 up -d --no-deps freqtrade stage22-hotspot
+docker compose -p freqtrade-stage22 --profile stage22 ps
+```
+
+在现有 FreqUI 里添加一个 Bot：
+
+```text
+Bot Name: stage22
+API Url: http://服务器IP:18083
+Username: .env 里的 FREQTRADE_API_USERNAME
+Password: .env 里的 FREQTRADE_API_PASSWORD
+```
+
+只看 Stage22 日志：
+
+```bash
+cd /data/apps/freqtrade/server-deploy-stage22
+docker compose -p freqtrade-stage22 logs --tail=200 --no-color freqtrade
+docker compose -p freqtrade-stage22 logs --tail=100 --no-color stage22-hotspot
+```
+
+停掉 Stage22，不影响 Stage20/Stage21 或原模拟盘：
+
+```bash
+cd /data/apps/freqtrade/server-deploy-stage22
+docker compose -p freqtrade-stage22 down
+```
+
 ## 镜像
 
 - Freqtrade 后端：`ghcr.io/sunlightcold/freqtrade:develop`
