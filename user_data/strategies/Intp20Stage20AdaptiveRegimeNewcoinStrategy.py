@@ -19,7 +19,14 @@ class Intp20Stage20AdaptiveRegimeNewcoinStrategy(Intp20Stage19AggressiveNewcoinS
     """
 
     startup_candle_count = 240
-    stoploss = -0.30
+    stoploss = -0.16
+
+    order_types = {
+        "entry": "limit",
+        "exit": "market",
+        "stoploss": "market",
+        "stoploss_on_exchange": False,
+    }
 
     max_stake_multiplier = 3.00
     min_stake_multiplier = 0.32

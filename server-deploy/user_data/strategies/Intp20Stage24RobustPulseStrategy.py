@@ -34,26 +34,6 @@ class Intp20Stage24RobustPulseStrategy(Intp20Stage23AggressiveGenericPulseStrate
         "s21_momo_s_",
     )
 
-    protected_legacy_prefixes = (
-        "s7_",
-        "s8_",
-        "s9_",
-        "s10_",
-        "s11_",
-        "s12_",
-        "s13_",
-        "s14_",
-        "s15_",
-    )
-
-    @classmethod
-    def _is_stage24_legacy_tag(cls, entry_tag: str | None) -> bool:
-        if not entry_tag:
-            return False
-        if entry_tag.startswith(("s19_", "s20_", "s21_", "s22_")):
-            return False
-        return entry_tag.startswith(cls.protected_legacy_prefixes) or "_h" in entry_tag
-
     def custom_exit(
         self,
         pair: str,
@@ -63,20 +43,15 @@ class Intp20Stage24RobustPulseStrategy(Intp20Stage23AggressiveGenericPulseStrate
         current_profit: float,
         **kwargs,
     ) -> str | bool | None:
-        if self._is_stage24_legacy_tag(trade.enter_tag):
-            trade_minutes = (current_time - trade.open_date_utc).total_seconds() / 60
-            if current_profit >= 0.035:
-                return "stage24_legacy_fast_profit_exit"
-            if trade_minutes >= 8 and current_profit >= 0.020:
-                return "stage24_legacy_take_profit_exit"
-            if trade_minutes >= 20 and current_profit >= 0.008:
-                return "stage24_legacy_time_profit_exit"
-            if trade_minutes >= 3 and current_profit <= -0.055:
-                return "stage24_legacy_fast_loss_exit"
-            if trade_minutes >= 10 and current_profit <= -0.035:
-                return "stage24_legacy_adverse_loss_exit"
-            if trade_minutes >= 45:
-                return "stage24_legacy_max_hold_exit"
+        if self._is_protected_legacy_tag(trade.enter_tag):
+            exit_reason = self._legacy_stage_exit_reason(
+                trade,
+                current_time,
+                current_profit,
+                "stage24",
+            )
+            if exit_reason:
+                return exit_reason
         return super().custom_exit(
             pair,
             trade,
