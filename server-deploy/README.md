@@ -36,7 +36,9 @@ docker compose up -d
 docker compose ps -a
 ```
 
-## 切换到 Stage17 1000U 模拟盘
+## Stage17 1000U 实验候选
+
+Stage17 当前不满足“稳定年化 100% + 高频交易”的采用要求。最新 1000U/0.05% 单边手续费抽测中，2026-06-01..2026-06-12 只有 11 单、约 1.1 单/天、总收益 +0.14%。保留下面命令只用于复现实验或回滚排查，不作为推荐部署。
 
 服务器只需要拉取仓库并用命令更新 `.env`，不需要手动上传文件：
 
@@ -69,7 +71,7 @@ docker compose up -d --remove-orphans
 docker compose logs --tail=100 -f freqtrade
 ```
 
-Stage17 配置为 1000 USDT 模拟本金，单笔 90 USDT，最多 10 个同时持仓，手续费按单边 0.05% 写入配置。保持 `dry_run=true`，先看前向模拟盘表现。
+Stage17 配置为 1000 USDT 模拟本金，单笔 90 USDT，最多 10 个同时持仓，手续费按单边 0.05% 写入配置。该策略仅作为实验候选保留。
 
 ## 切换到 Stage18 无 Key 热点模拟盘
 
@@ -177,11 +179,13 @@ freqtrade backtesting \
   --timerange 20260601-
 ```
 
-## 切换到 Stage20 自适应学习模拟盘
+## Stage20 自适应学习实验候选
 
 Stage20 是独立策略，不覆盖 Stage17/Stage24。它使用扩展后的新币和高 beta 币池、1m 周期、1000 USDT 模拟本金、单笔 90 USDT、最多 10 个同时持仓，手续费按单边 0.05% 写入配置。当前实盘入口只保留快扫动量多空，偏向捕捉短时间流动性冲击；更宽的 pulse / vwap 入口保留在代码里做研究，但在 Stage23/24 中会被屏蔽。
 
-### 并行部署 Stage20，不影响当前模拟盘
+Stage20 当前不满足“稳定年化 100% + 高频交易”的采用要求。最新 1000U/0.05% 单边手续费抽测中，2026-06-01..2026-06-12 只有 9 单、约 0.9 单/天、总收益 +0.33%。保留部署命令只用于实验复现，不作为推荐运行方案。
+
+### 并行运行 Stage20 实验，不影响当前模拟盘
 
 当前服务器仓库路径为 `/data/apps/freqtrade` 时，用独立 compose 项目和独立部署目录运行 Stage20。这样不会重建现有 `server-deploy` 里的模拟盘，Stage20 会使用自己的数据库和 Freqtrade API 端口。WebUI 使用现有 `server-deploy` 的 FreqUI，在里面添加 Stage20 这个 Bot。
 
@@ -632,9 +636,11 @@ docker compose -p freqtrade-stage23 down
 .\.venv\Scripts\python.exe user_data\scripts\run_offline_futures_backtest.py -c user_data\config_binance_stage23_aggressive_generic_pulse_93pair_1000u_dryrun.json --strategy Intp20Stage23AggressiveGenericPulseStrategy --timerange 20250101-20250201 --fee 0.0005 --no-timeframe-detail --cache none
 ```
 
-## 部署 Stage24 稳健脉冲模拟盘
+## Stage24 稳健脉冲实验候选
 
-Stage24 是 Stage23 的稳健改进版，不覆盖已有模拟盘。2023-06 到 2026-06 的月度分段回测显示，Stage23 最大结构性拖累来自通用 `s21_momo_s_*` 短动量入口；Stage24 保留 93 币组合和多空交易，但屏蔽长期不稳的通用学习入口，减少弱市场阶段的手续费和噪声磨损。
+Stage24 是 Stage23 的稳健改进版，不覆盖已有模拟盘。最新复核显示，长期拖累来自通用 `s21_momo_l_*` 长动量和松散 pull 入口；Stage24 当前只放行 `s21_momo_s_*` 短动量，屏蔽长期不稳的通用学习入口，减少弱市场阶段的手续费和噪声磨损。
+
+Stage24 也不满足“稳定年化 100% + 高频交易”的采用要求。2026-06-01..2026-06-12 窗口为 14 单、约 1.4 单/天、总收益 +2.02%、短窗口 CAGR 107.54%；但 2026-04-01..2026-05-01 只有 4 单、约 0.13 单/天、总收益 +0.28%、CAGR 3.49%。因此不能采用为目标策略。
 
 长样本月度分段结果，手续费按单边 `0.0005` 计算：
 
@@ -645,7 +651,7 @@ Stage24 是 Stage23 的稳健改进版，不覆盖已有模拟盘。2023-06 到 
 2026-01~06-12:  +61.92%, 472 trades, max monthly DD 4.59%
 ```
 
-这些是历史回测结果，不是实盘收益承诺。Stage24 的优先级高于 Stage23：它牺牲了一点 2026 强势期收益，但明显改善 2024/2025 的弱窗口表现。
+这些是历史回测结果，不是实盘收益承诺，且不能替代最新 1000U 复核结论。Stage24 只作为实验候选保留。
 
 ### 独立部署
 

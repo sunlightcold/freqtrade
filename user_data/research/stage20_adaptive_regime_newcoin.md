@@ -1,5 +1,16 @@
 # Stage20 Adaptive Regime Newcoin
 
+## 2026-06-15 Status
+
+Rejected for the user's current adoption target. The current requirement is a
+clearly high-frequency long/short strategy with stable annualized return above
+100% under a 1000 USDT dry-run wallet and 0.05% one-side fee assumptions.
+
+Latest 1000U replay for 2026-06-01..2026-06-12 produced 9 trades, about 0.9
+trades/day, +0.33% total return, 12.92% CAGR, and 4.67 profit factor. It traded
+both long and short, but the trade frequency and annualized return are not
+acceptable for adoption.
+
 ## Design
 
 Stage20 keeps the Stage18/19 base stack and adds a causal online-learning layer for generic 1m new-coin/high-beta entries.  The layer uses only information available at the candle being evaluated: OHLCV regime quality, BTC market context, and rolling post-fee memory shifted by the configured holding horizon.
@@ -7,16 +18,15 @@ Stage20 keeps the Stage18/19 base stack and adds a causal online-learning layer 
 The current production profile is deliberately not pair/month fitted:
 
 - Stage19 pair-prefix add-ons are disabled.
-- Stage20 short-learning entries are observation-only because the short template was weak in both 2025 and 2026 windows.
-- Stage20 pullback-learning entries are observation-only because the pull template stayed negative after the non-fitting filters.
-- Stage20 momentum-long entries remain tradable, but confirmation, stake, leverage, and exit logic use the momentum family memory only, not a blended max that can borrow pullback statistics.
+- Stage20 production entries are narrowed to fast liquidity-sweep long/short signals.
+- Wider pulse, vwap-reversion, and loose pullback experiments remain research-only because they were fee-sensitive or unstable in split-window checks.
 - No DCA, no martingale, no position adjustment.
 
 ## Simulation Profile
 
 - Exchange: Binance USDT futures, isolated margin
 - Timeframe: 1m
-- Pairs: 38 static futures pairs
+- Pairs: expanded static futures pair set focused on new and high-beta contracts
 - Local research config: `user_data/config_binance_stage20_adaptive_regime_newcoin_38pair_200u_dryrun.json`
 - Server dry-run config: `server-deploy/user_data/config_binance_stage20_adaptive_regime_newcoin_38pair_1000u_dryrun.json`
 - Server wallet/stake: 1000 USDT wallet, 90 USDT stake, max 10 open trades
