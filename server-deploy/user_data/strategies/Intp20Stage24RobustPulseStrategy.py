@@ -12,10 +12,10 @@ class Intp20Stage24RobustPulseStrategy(Intp20Stage23AggressiveGenericPulseStrate
     Stage-24 robust high-turnover pulse.
 
     Long-window split backtests from 2023-06 through 2026-06 showed that the
-    generic Stage-21 short momentum layer was the main structural drag across
-    regimes.  This variant keeps the 93-pair portfolio and pair-specific long/
-    short stack, but removes the broad generic learning entries that did not
-    survive the extended walk-forward check after 0.05% taker fees.
+    generic Stage-21 long momentum and loose pull layers were structural drags
+    across regimes. This variant keeps the 93-pair portfolio and short generic
+    momentum, but removes broad generic learning entries that did not survive
+    the extended walk-forward check after 0.05% taker fees.
     """
 
     max_stage24_leverage = 6.5
@@ -28,10 +28,17 @@ class Intp20Stage24RobustPulseStrategy(Intp20Stage23AggressiveGenericPulseStrate
         "stoploss_on_exchange": False,
     }
 
-    blocked_entry_prefixes = Intp20Stage23AggressiveGenericPulseStrategy.blocked_entry_prefixes + (
+    blocked_entry_prefixes = (
+        "s17_",
+        "s20_pulse_",
+        "s20_sweep_",
+        "s20_vwaprev_",
+        "s20_momo_l_",
         "s20_momo_s_",
         "s20_pull_l_",
-        "s21_momo_s_",
+        "s21_momo_l_",
+        "s21_pull_l_",
+        "s21_pull_s_",
     )
 
     def custom_exit(

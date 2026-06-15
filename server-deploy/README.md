@@ -41,13 +41,13 @@ docker compose ps -a
 服务器只需要拉取仓库并用命令更新 `.env`，不需要手动上传文件：
 
 ```bash
-cd /path/to/freqtrade/server-deploy
+cd /data/apps/freqtrade/server-deploy
 docker compose down
 mkdir -p backups
 cp user_data/tradesv3.sqlite backups/tradesv3-before-stage17-$(date +%Y%m%d-%H%M%S).sqlite 2>/dev/null || true
 rm -f user_data/tradesv3.sqlite user_data/tradesv3.sqlite-shm user_data/tradesv3.sqlite-wal
 
-cd /path/to/freqtrade
+cd /data/apps/freqtrade
 git pull --ff-only
 cd server-deploy
 
@@ -63,6 +63,7 @@ set_env() {
 
 set_env FREQTRADE_CONFIG config_binance_stage17_turbo_adaptive_scalp_20pair_1000u_dryrun.json
 set_env FREQTRADE_STRATEGY Intp20Stage17TurboAdaptiveScalpStrategy
+sed -i '/^FREQTRADE_EXTRA_CONFIG_ARGS=/d' .env
 docker compose pull
 docker compose up -d --remove-orphans
 docker compose logs --tail=100 -f freqtrade
@@ -178,7 +179,7 @@ freqtrade backtesting \
 
 ## 切换到 Stage20 自适应学习模拟盘
 
-Stage20 是独立策略，不覆盖 Stage19。它仍然使用 38 对 Binance U 本位合约、1m 周期、1000 USDT 模拟本金、单笔 90 USDT、最多 10 个同时持仓，手续费按单边 0.05% 写入配置。Stage20 的新增学习层不按币种或月份拟合：短空和 pull 学习入口默认只观察不实盘，当前只允许通过快慢滚动记忆、胜率和 regime 过滤的动量多头学习入口参与。
+Stage20 是独立策略，不覆盖 Stage17/Stage24。它使用扩展后的新币和高 beta 币池、1m 周期、1000 USDT 模拟本金、单笔 90 USDT、最多 10 个同时持仓，手续费按单边 0.05% 写入配置。当前实盘入口只保留快扫动量多空，偏向捕捉短时间流动性冲击；更宽的 pulse / vwap 入口保留在代码里做研究，但在 Stage23/24 中会被屏蔽。
 
 ### 并行部署 Stage20，不影响当前模拟盘
 
@@ -216,26 +217,7 @@ set_env FREQTRADE_API_BIND 0.0.0.0
 set_env FREQTRADE_API_PORT 18080
 set_env FREQTRADE_EXCHANGE_KEY ""
 set_env FREQTRADE_EXCHANGE_SECRET ""
-set_env FREQTRADE_EXTRA_CONFIG_ARGS "--config /freqtrade/user_data/config_server_api_override.json"
-
-SERVER_ORIGIN="http://82.158.225.90:8081"
-python3 - "$SERVER_ORIGIN" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-origin = sys.argv[1]
-path = Path("user_data/config_server_api_override.json")
-example = Path("user_data/config_server_api_override.example.json")
-data = json.loads(
-    path.read_text(encoding="utf-8")
-    if path.exists()
-    else example.read_text(encoding="utf-8")
-)
-api_server = data.setdefault("api_server", {})
-api_server["CORS_origins"] = [origin]
-path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-PY
+sed -i '/^FREQTRADE_EXTRA_CONFIG_ARGS=/d' .env
 
 docker compose -p freqtrade-stage20 --profile stage20 pull
 docker compose -p freqtrade-stage20 --profile stage20 up -d --no-deps freqtrade stage20-hotspot
@@ -257,28 +239,11 @@ Username: .env 里的 FREQTRADE_API_USERNAME
 Password: .env 里的 FREQTRADE_API_PASSWORD
 ```
 
-`config_server_api_override.json` 里需要允许现有 WebUI 来源，例如 `http://82.158.225.90:8081`。如果服务器 IP 或域名变了，按下面更新：
+Stage20 的服务端配置已内置现有 WebUI 来源 `http://82.158.225.90:8081`。如果服务器 IP 或域名变了，直接更新 `user_data/config_binance_stage20_adaptive_regime_newcoin_38pair_1000u_dryrun.json` 里的 `api_server.CORS_origins`，不要再给 `.env` 增加不存在的 `config_server_api_override.json`。
 
 ```bash
 cd /data/apps/freqtrade/server-deploy-stage20
-SERVER_ORIGIN="http://82.158.225.90:8081"
-python3 - "$SERVER_ORIGIN" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-origin = sys.argv[1]
-path = Path("user_data/config_server_api_override.json")
-example = Path("user_data/config_server_api_override.example.json")
-data = json.loads(
-    path.read_text(encoding="utf-8")
-    if path.exists()
-    else example.read_text(encoding="utf-8")
-)
-api_server = data.setdefault("api_server", {})
-api_server["CORS_origins"] = [origin]
-path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-PY
+sed -i '/^FREQTRADE_EXTRA_CONFIG_ARGS=/d' .env
 docker compose -p freqtrade-stage20 --profile stage20 up -d --no-deps freqtrade
 ```
 
@@ -302,6 +267,7 @@ sed -i '/^PERMISSIONS_INIT_CONTAINER_NAME=/d' .env
 sed -i '/^STAGE20_HOTSPOT_CONTAINER_NAME=/d' .env
 sed -i '/^FREQUI_BIND=/d' .env
 sed -i '/^FREQUI_PORT=/d' .env
+sed -i '/^FREQTRADE_EXTRA_CONFIG_ARGS=/d' .env
 
 docker compose -p freqtrade-stage20 --profile stage20 up -d --no-deps freqtrade stage20-hotspot
 ```
@@ -717,26 +683,7 @@ set_env FREQTRADE_API_BIND 0.0.0.0
 set_env FREQTRADE_API_PORT 18085
 set_env FREQTRADE_EXCHANGE_KEY ""
 set_env FREQTRADE_EXCHANGE_SECRET ""
-set_env FREQTRADE_EXTRA_CONFIG_ARGS "--config /freqtrade/user_data/config_server_api_override.json"
-
-SERVER_ORIGIN="http://82.158.225.90:8081"
-python3 - "$SERVER_ORIGIN" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-origin = sys.argv[1]
-path = Path("user_data/config_server_api_override.json")
-example = Path("user_data/config_server_api_override.example.json")
-data = json.loads(
-    path.read_text(encoding="utf-8")
-    if path.exists()
-    else example.read_text(encoding="utf-8")
-)
-api_server = data.setdefault("api_server", {})
-api_server["CORS_origins"] = [origin]
-path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-PY
+sed -i '/^FREQTRADE_EXTRA_CONFIG_ARGS=/d' .env
 
 docker compose -p freqtrade-stage24 --profile stage24 pull
 docker compose -p freqtrade-stage24 --profile stage24 up -d --force-recreate --no-deps freqtrade stage24-hotspot
@@ -751,6 +698,8 @@ API Url: http://服务器IP:18085
 Username: .env 里的 FREQTRADE_API_USERNAME
 Password: .env 里的 FREQTRADE_API_PASSWORD
 ```
+
+Stage24 的服务端配置已内置现有 WebUI 来源 `http://82.158.225.90:8081`。如果服务器 IP 或域名变了，直接更新 `user_data/config_binance_stage24_robust_pulse_93pair_1000u_dryrun.json` 里的 `api_server.CORS_origins`。
 
 只看 Stage24 日志：
 
@@ -868,4 +817,11 @@ cp user_data/config_server_api_override.example.json user_data/config_server_api
 
 ```env
 FREQTRADE_EXTRA_CONFIG_ARGS=--config /freqtrade/user_data/config_server_api_override.json
+```
+
+只有确认 `user_data/config_server_api_override.json` 已经存在时才设置这一项。否则 Freqtrade 启动时会报 `Config file ... not found` 并循环重启。恢复方式：
+
+```bash
+sed -i '/^FREQTRADE_EXTRA_CONFIG_ARGS=/d' .env
+docker compose up -d
 ```

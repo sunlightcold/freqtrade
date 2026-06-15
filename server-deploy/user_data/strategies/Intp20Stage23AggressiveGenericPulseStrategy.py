@@ -28,6 +28,10 @@ class Intp20Stage23AggressiveGenericPulseStrategy(Intp20Stage21DualHfNewcoinStra
     max_stage23_leverage = 6.5
 
     blocked_entry_prefixes = (
+        "s17_",
+        "s20_pulse_",
+        "s20_sweep_",
+        "s20_vwaprev_",
         "s20_momo_l_",
         "s21_momo_l_",
         "s21_pull_l_",

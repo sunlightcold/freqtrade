@@ -131,6 +131,10 @@ class Intp20Stage18NoKeyHotspotStrategy(Intp20Stage17TurboAdaptiveScalpStrategy)
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         dataframe = super().populate_entry_trend(dataframe, metadata)
+        legacy_stage17 = dataframe["enter_tag"].fillna("").str.startswith("s17_")
+        if legacy_stage17.any():
+            dataframe.loc[legacy_stage17, ["enter_long", "enter_short"]] = 0
+            dataframe.loc[legacy_stage17, "enter_tag"] = ""
         if "enter_long" not in dataframe:
             dataframe["enter_long"] = 0
         if "enter_short" not in dataframe:

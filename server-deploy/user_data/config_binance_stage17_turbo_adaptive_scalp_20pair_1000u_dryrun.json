@@ -97,7 +97,8 @@
     "ws_token": "change-this-local-dev-websocket-token",
     "CORS_origins": [
       "http://127.0.0.1:8081",
-      "http://localhost:8081"
+      "http://localhost:8081",
+      "http://82.158.225.90:8081"
     ],
     "username": "freqtrader",
     "password": "SuperSecurePassword"
