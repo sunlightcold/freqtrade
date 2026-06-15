@@ -36,6 +36,33 @@ docker compose up -d
 docker compose ps -a
 ```
 
+## 覆盖当前三路为 Stage25 / Stage26 / Stage27
+
+服务器当前三路模拟盘按下面映射覆盖：
+
+- `/data/apps/freqtrade/server-deploy` -> `Intp20Stage25CompositeScalpStrategy`
+- `/data/apps/freqtrade/server-deploy-stage20` -> `Intp20Stage26ReversionShockStrategy`
+- `/data/apps/freqtrade/server-deploy-stage24` -> `Intp20Stage27QualityRotationScalpStrategy`
+
+只需要拉代码并执行脚本，不需要手动上传文件。默认保留各目录 `.env` 里的 API 密码和交易所 key，只改策略配置并重启 `freqtrade` 服务：
+
+```bash
+cd /data/apps/freqtrade
+git pull --ff-only
+bash server-deploy/apply-stage25-27-overrides.sh /data/apps/freqtrade
+cd /data/apps/freqtrade/server-deploy && docker compose -p server-deploy ps
+cd /data/apps/freqtrade/server-deploy-stage20 && docker compose -p freqtrade-stage20 ps
+cd /data/apps/freqtrade/server-deploy-stage24 && docker compose -p freqtrade-stage24 ps
+```
+
+如果要清空旧模拟盘订单记录、用 1000U 重新开始，执行脚本前加 `RESET_DB=1`。脚本会先备份 `tradesv3.sqlite` 再删除旧库：
+
+```bash
+cd /data/apps/freqtrade
+git pull --ff-only
+RESET_DB=1 bash server-deploy/apply-stage25-27-overrides.sh /data/apps/freqtrade
+```
+
 ## Stage17 1000U 实验候选
 
 Stage17 当前不满足“稳定年化 100% + 高频交易”的采用要求。最新 1000U/0.05% 单边手续费抽测中，2026-06-01..2026-06-12 只有 11 单、约 1.1 单/天、总收益 +0.14%。保留下面命令只用于复现实验或回滚排查，不作为推荐部署。
