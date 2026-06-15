@@ -9,6 +9,14 @@ SOURCE="${ROOT}/server-deploy"
 
 copy_runtime_files() {
   local target="$1"
+  local source_real
+  local target_real
+  source_real="$(cd "${SOURCE}" && pwd -P)"
+  target_real="$(cd "${target}" && pwd -P)"
+  if [ "${source_real}" = "${target_real}" ]; then
+    return
+  fi
+
   mkdir -p "${target}/user_data/strategies"
 
   cp -f "${SOURCE}/user_data/strategies/Intp20Stage7AggressivePortfolioStrategy.py" \
