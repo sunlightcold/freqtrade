@@ -543,7 +543,6 @@ class Intp20Stage29HighWinReversionScalpStrategy(Intp20Stage21DualHfNewcoinStrat
         "W/",
         "PUMP/",
         "ALT/",
-        "MEW/",
         "OP/",
         "ONDO/",
         "MOODENG/",
@@ -647,7 +646,14 @@ class Intp20Stage30HighWinMomentumScalpStrategy(Intp20Stage21DualHfNewcoinStrate
             return dataframe
 
         tag = dataframe["enter_tag"].fillna("")
-        allowed = tag.eq("s21_momo_l_h8m_l5")
+        leader_pull = (
+            metadata["pair"].startswith("EIGEN/")
+            & tag.eq("s21_pull_l_h7m_l4")
+            & (dataframe["stage20_pull_win_long"].fillna(0.5) >= 0.56)
+            & (dataframe["stage20_pull_edge_long"].fillna(0.0) > 0.00055)
+            & (dataframe["stage20_adaptive_long"].fillna(0.0) > 0.58)
+        )
+        allowed = tag.eq("s21_momo_l_h8m_l5") | leader_pull
         allowed &= dataframe["stage20_btc_bias"].fillna(0.0) > 0.02
         allowed &= dataframe["stage20_btc_trend"].fillna(0.0) > -0.05
         allowed &= dataframe["stage20_btc_risk"].fillna(0.0) > 0.035
