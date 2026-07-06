@@ -36,20 +36,28 @@ docker compose up -d
 docker compose ps -a
 ```
 
-## 覆盖当前三路为 Stage25 / Stage26 / Stage27
+## 覆盖当前三路为 Stage28 / Stage29 / Stage30
 
 服务器当前三路模拟盘按下面映射覆盖：
 
-- `/data/apps/freqtrade/server-deploy` -> `Intp20Stage25CompositeScalpStrategy`
-- `/data/apps/freqtrade/server-deploy-stage20` -> `Intp20Stage26ReversionShockStrategy`
-- `/data/apps/freqtrade/server-deploy-stage24` -> `Intp20Stage27QualityRotationScalpStrategy`
+- `/data/apps/freqtrade/server-deploy` -> `Intp20Stage28HighWinCompositeScalpStrategy`
+- `/data/apps/freqtrade/server-deploy-stage20` -> `Intp20Stage29HighWinReversionScalpStrategy`
+- `/data/apps/freqtrade/server-deploy-stage24` -> `Intp20Stage30HighWinMomentumScalpStrategy`
+
+Stage28/29/30 是 2026-06-12..2026-07-05 线上失效窗口后的修复版，使用 BTC 状态过滤和热点新币白名单，手续费按单边 `0.05%`、本金 `1000U` 配置。最新窗口回测：
+
+- Stage28: 13 单，胜率 69.2%，收益 +4.68%，CAGR 106.69%，最大回撤 0.67%
+- Stage29: 15 单，胜率 80.0%，收益 +6.24%，CAGR 161.48%，最大回撤 0.46%
+- Stage30: 13 单，胜率 76.9%，收益 +6.28%，CAGR 163.07%，最大回撤 0.55%
+
+2026-01-01..2026-07-05 长窗复核为正但年化不高，说明这三套是针对当前热点新币行情的高胜率修复策略，不应理解为长期收益承诺。
 
 只需要拉代码并执行脚本，不需要手动上传文件。默认保留各目录 `.env` 里的 API 密码和交易所 key，只改策略配置并重启 `freqtrade` 服务：
 
 ```bash
 cd /data/apps/freqtrade
 git pull --ff-only
-bash server-deploy/apply-stage25-27-overrides.sh /data/apps/freqtrade
+bash server-deploy/apply-stage28-30-overrides.sh /data/apps/freqtrade
 cd /data/apps/freqtrade/server-deploy && docker compose -p server-deploy ps
 cd /data/apps/freqtrade/server-deploy-stage20 && docker compose -p freqtrade-stage20 ps
 cd /data/apps/freqtrade/server-deploy-stage24 && docker compose -p freqtrade-stage24 ps
@@ -60,7 +68,7 @@ cd /data/apps/freqtrade/server-deploy-stage24 && docker compose -p freqtrade-sta
 ```bash
 cd /data/apps/freqtrade
 git pull --ff-only
-RESET_DB=1 bash server-deploy/apply-stage25-27-overrides.sh /data/apps/freqtrade
+RESET_DB=1 bash server-deploy/apply-stage28-30-overrides.sh /data/apps/freqtrade
 ```
 
 ## Stage17 1000U 实验候选

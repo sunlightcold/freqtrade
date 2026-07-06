@@ -27,14 +27,24 @@ copy_runtime_files() {
     "${target}/user_data/strategies/"
   cp -f "${SOURCE}/user_data/strategies/Intp20Stage16StressPrunedScalpStrategy.py" \
     "${target}/user_data/strategies/"
+  cp -f "${SOURCE}/user_data/strategies/Intp20Stage17AdaptiveScalpStrategy.py" \
+    "${target}/user_data/strategies/"
+  cp -f "${SOURCE}/user_data/strategies/Intp20Stage18NoKeyHotspotStrategy.py" \
+    "${target}/user_data/strategies/"
+  cp -f "${SOURCE}/user_data/strategies/Intp20Stage19AggressiveNewcoinStrategy.py" \
+    "${target}/user_data/strategies/"
+  cp -f "${SOURCE}/user_data/strategies/Intp20Stage20AdaptiveRegimeNewcoinStrategy.py" \
+    "${target}/user_data/strategies/"
+  cp -f "${SOURCE}/user_data/strategies/Intp20Stage21DualHfNewcoinStrategy.py" \
+    "${target}/user_data/strategies/"
   cp -f "${SOURCE}/user_data/strategies/Intp20Stage25HfCandidateStrategies.py" \
     "${target}/user_data/strategies/"
 
-  cp -f "${SOURCE}/user_data/config_binance_stage25_composite_scalp_20pair_1000u_dryrun.json" \
+  cp -f "${SOURCE}/user_data/config_binance_stage28_highwin_composite_20pair_1000u_dryrun.json" \
     "${target}/user_data/"
-  cp -f "${SOURCE}/user_data/config_binance_stage26_reversion_shock_20pair_1000u_dryrun.json" \
+  cp -f "${SOURCE}/user_data/config_binance_stage29_highwin_reversion_20pair_1000u_dryrun.json" \
     "${target}/user_data/"
-  cp -f "${SOURCE}/user_data/config_binance_stage27_quality_rotation_20pair_1000u_dryrun.json" \
+  cp -f "${SOURCE}/user_data/config_binance_stage30_highwin_momentum_20pair_1000u_dryrun.json" \
     "${target}/user_data/"
 }
 
@@ -66,7 +76,7 @@ backup_and_reset_db() {
   mkdir -p "${target}/backups"
   if [ -f "${target}/user_data/tradesv3.sqlite" ]; then
     cp "${target}/user_data/tradesv3.sqlite" \
-      "${target}/backups/tradesv3-before-stage25-27-$(date +%Y%m%d-%H%M%S).sqlite"
+      "${target}/backups/tradesv3-before-stage28-30-$(date +%Y%m%d-%H%M%S).sqlite"
   fi
   rm -f "${target}/user_data/tradesv3.sqlite" \
     "${target}/user_data/tradesv3.sqlite-shm" \
@@ -109,28 +119,28 @@ configure_bot() {
 configure_bot \
   "${ROOT}/server-deploy" \
   "server-deploy" \
-  "config_binance_stage25_composite_scalp_20pair_1000u_dryrun.json" \
-  "Intp20Stage25CompositeScalpStrategy" \
+  "config_binance_stage28_highwin_composite_20pair_1000u_dryrun.json" \
+  "Intp20Stage28HighWinCompositeScalpStrategy" \
   "127.0.0.1" \
   "8080"
 
 configure_bot \
   "${ROOT}/server-deploy-stage20" \
   "freqtrade-stage20" \
-  "config_binance_stage26_reversion_shock_20pair_1000u_dryrun.json" \
-  "Intp20Stage26ReversionShockStrategy" \
+  "config_binance_stage29_highwin_reversion_20pair_1000u_dryrun.json" \
+  "Intp20Stage29HighWinReversionScalpStrategy" \
   "0.0.0.0" \
   "18080"
 
 configure_bot \
   "${ROOT}/server-deploy-stage24" \
   "freqtrade-stage24" \
-  "config_binance_stage27_quality_rotation_20pair_1000u_dryrun.json" \
-  "Intp20Stage27QualityRotationScalpStrategy" \
+  "config_binance_stage30_highwin_momentum_20pair_1000u_dryrun.json" \
+  "Intp20Stage30HighWinMomentumScalpStrategy" \
   "0.0.0.0" \
   "18085"
 
-echo "Applied Stage25/26/27 overrides."
-echo "Stage25: ${ROOT}/server-deploy -> 127.0.0.1:8080"
-echo "Stage26: ${ROOT}/server-deploy-stage20 -> 0.0.0.0:18080"
-echo "Stage27: ${ROOT}/server-deploy-stage24 -> 0.0.0.0:18085"
+echo "Applied Stage28/29/30 overrides."
+echo "Stage28: ${ROOT}/server-deploy -> 127.0.0.1:8080"
+echo "Stage29: ${ROOT}/server-deploy-stage20 -> 0.0.0.0:18080"
+echo "Stage30: ${ROOT}/server-deploy-stage24 -> 0.0.0.0:18085"

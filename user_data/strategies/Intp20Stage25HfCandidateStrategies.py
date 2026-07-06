@@ -5,6 +5,7 @@ from datetime import datetime
 from pandas import DataFrame
 
 from Intp20Stage15HighTurnoverScalpStrategy import Intp20Stage15AggressiveScalpStrategy
+from Intp20Stage21DualHfNewcoinStrategy import Intp20Stage21DualHfNewcoinStrategy
 
 
 class Intp20Stage25RiskExitMixin:
@@ -353,3 +354,342 @@ class Intp20Stage27QualityRotationScalpStrategy(
         if entry_tag in self.rotation_bonus_tags:
             target += 0.45
         return max(1.0, min(target, max_leverage, self.max_boost_leverage))
+
+
+class Intp20Stage28HighWinCompositeScalpStrategy(
+    Intp20Stage21DualHfNewcoinStrategy,
+):
+    """
+    Stage-28: live-window high-win newcoin momentum scalp.
+
+    Stage25/26/27 failed in live dry-run because broad historical tags kept
+    trading after their edge disappeared. This corrective variant moves to the
+    Stage21 adaptive newcoin engine, but only permits the latest-window positive
+    hotspot names and cuts failed momentum immediately.
+    """
+
+    stage28_pair_prefixes = (
+        "EIGEN/",
+        "MERL/",
+        "W/",
+        "PUMP/",
+        "ALT/",
+        "OP/",
+        "ONDO/",
+    )
+    stage28_allowed_tags = frozenset({"s21_momo_l_h8m_l5"})
+
+    allowed_entry_tags = frozenset(
+        {
+            "s9_01_aave_panic_l_mc_h24_l4",
+            "s13_02_dot_rsi_s_lc_h24_l4",
+            "s15_01_aave_vwap_s_lt_h30m_l5",
+            "s9_08_xtz_rsi_s_lc_h24_l4",
+            "s13_01_near_rsi_s_lc_h24_l4",
+            "s9_10_xrp_rsi_s_mx_h24_l4",
+            "s15_03_xrp_vwap_l_mhv_h30m_l5",
+            "s9_04_xlm_panic_l_mc_h12_l4",
+            "s13_03_icp_rsi_s_lc_h24_l4",
+            "s9_16_ltc_vwap_s_lc_h18_l5",
+            "s9_02_sol_panic_s_mc_h24_l4",
+            "s15_04_op_vwap_l_mchop_h30m_l5",
+            "s15_02_doge_vwap_l_mchop_h30m_l5",
+            "s10_03_xrp_maoff_l_ma_h18m_l5",
+            "s9_05_comp_rsi_l_mx_h24_l4",
+            "s10_06_xlm_maoff_l_ma_h12m_l5",
+            "s10_02_etc_maoff_l_mchop_h18m_l5",
+            "s11_02_sol_vstretch_l_mchop_h12m_l5",
+        }
+    )
+    stoploss = -0.026
+
+    max_stake_multiplier = 1.80
+    min_stake_multiplier = 0.45
+    max_boost_leverage = 5.2
+    max_stage21_leverage = 5.2
+
+    tag_stake_weights = {
+        **Intp20Stage15AggressiveScalpStrategy.tag_stake_weights,
+        "s9_01_aave_panic_l_mc_h24_l4": 1.20,
+        "s13_02_dot_rsi_s_lc_h24_l4": 1.14,
+        "s15_01_aave_vwap_s_lt_h30m_l5": 1.12,
+        "s9_08_xtz_rsi_s_lc_h24_l4": 1.10,
+        "s9_10_xrp_rsi_s_mx_h24_l4": 1.08,
+        "s13_01_near_rsi_s_lc_h24_l4": 1.00,
+        "s13_03_icp_rsi_s_lc_h24_l4": 0.92,
+    }
+
+    def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        dataframe = super().populate_entry_trend(dataframe, metadata)
+        if not metadata["pair"].startswith(self.stage28_pair_prefixes):
+            dataframe.loc[:, ["enter_long", "enter_short"]] = 0
+            dataframe.loc[:, "enter_tag"] = ""
+            return dataframe
+
+        tag = dataframe["enter_tag"].fillna("")
+        allowed_tag = tag.isin(self.stage28_allowed_tags)
+
+        long_quality = (
+            tag.eq("s21_momo_l_h8m_l5")
+            & (dataframe["stage20_adaptive_long"].fillna(0.0) > 0.60)
+            & (dataframe["stage20_trend_long"].fillna(0.0) > 0.58)
+            & (dataframe["stage20_momo_win_long"].fillna(0.5) >= 0.55)
+            & (dataframe["stage20_momo_edge_long"].fillna(0.0) > 0.00075)
+            & (dataframe["stage20_chop_risk"].fillna(1.0) < 0.62)
+            & (dataframe["stage20_btc_bias"].fillna(0.0) > 0.02)
+            & (dataframe["stage20_btc_trend"].fillna(0.0) > -0.05)
+            & (dataframe["stage20_btc_risk"].fillna(0.0) > 0.035)
+            & (dataframe["stage20_btc_risk"].fillna(1.0) < 0.86)
+            & (dataframe["stage19_overheat_score"].fillna(1.0) < 0.72)
+            & (dataframe["stage19_hot_score"].fillna(0.0) > 0.42)
+            & (dataframe["stage19_volume_ratio"].fillna(0.0) > 1.02)
+            & (dataframe["stage19_roc_8"].fillna(0.0) > 0.0018)
+            & (dataframe["stage20_close_pos"].fillna(0.5) > 0.48)
+            & (dataframe["stage20_exhaustion_long"].fillna(1.0) < 0.72)
+        )
+        allowed = allowed_tag & long_quality
+        blocked = ~allowed
+        if blocked.any():
+            dataframe.loc[blocked, ["enter_long", "enter_short"]] = 0
+            dataframe.loc[blocked, "enter_tag"] = ""
+        return dataframe
+
+    def custom_exit(
+        self,
+        pair: str,
+        trade,
+        current_time: datetime,
+        current_rate: float,
+        current_profit: float,
+        **kwargs,
+    ) -> str | bool | None:
+        trade_minutes = (current_time - trade.open_date_utc).total_seconds() / 60
+        tag = trade.enter_tag or ""
+
+        if tag.startswith("s21_"):
+            if current_profit >= 0.0105:
+                return "stage28_hot_momo_take_profit"
+            if trade_minutes >= 4 and current_profit >= 0.0042:
+                return "stage28_hot_momo_time_profit"
+            if current_profit <= -0.009:
+                return "stage28_hot_momo_fast_loss"
+            if trade_minutes >= 7 and current_profit <= -0.0035:
+                return "stage28_hot_momo_decay_loss"
+            if trade_minutes >= 12:
+                return "stage28_hot_momo_timeout"
+            return None
+
+        target = 0.0075
+        if "_panic_" in tag or "_rsi_" in tag:
+            target = 0.0090
+        if "_maoff_" in tag or "_vstretch_" in tag:
+            target = 0.0065
+
+        if current_profit >= target:
+            return "stage28_fast_take_profit"
+        if trade_minutes >= 10 and current_profit >= 0.0028:
+            return "stage28_time_take_profit"
+        if trade_minutes >= 2 and current_profit <= -0.008:
+            return "stage28_fast_loss_cut"
+        if trade_minutes >= 10 and current_profit <= -0.0035:
+            return "stage28_stale_loss_cut"
+        if trade_minutes >= 18 and current_profit <= 0.001:
+            return "stage28_flat_timeout"
+        return super().custom_exit(
+            pair,
+            trade,
+            current_time,
+            current_rate,
+            current_profit,
+            **kwargs,
+        )
+
+    def leverage(
+        self,
+        pair: str,
+        current_time: datetime,
+        current_rate: float,
+        proposed_leverage: float,
+        max_leverage: float,
+        entry_tag: str | None,
+        side: str,
+        **kwargs,
+    ) -> float:
+        target = super().leverage(
+            pair,
+            current_time,
+            current_rate,
+            proposed_leverage,
+            max_leverage,
+            entry_tag,
+            side,
+            **kwargs,
+        )
+        return max(1.0, min(target, max_leverage, self.max_boost_leverage))
+
+
+class Intp20Stage29HighWinReversionScalpStrategy(Intp20Stage21DualHfNewcoinStrategy):
+    """
+    Stage-29: aggressive adaptive hotspot basket.
+
+    This is the higher-risk sibling of Stage28. It keeps Stage21's adaptive
+    momentum/pullback learner, but only on hotspot pairs that remained net
+    positive in the 2026-06-12..2026-07-05 failure window.
+    """
+
+    stage29_pair_prefixes = (
+        "EIGEN/",
+        "MERL/",
+        "W/",
+        "PUMP/",
+        "ALT/",
+        "MEW/",
+        "OP/",
+        "ONDO/",
+        "MOODENG/",
+    )
+    stage29_allowed_tags = frozenset(
+        {
+            "s21_momo_l_h8m_l5",
+            "s21_pull_l_h7m_l4",
+        }
+    )
+    stoploss = -0.035
+    max_stage21_leverage = 6.5
+
+    def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        dataframe = super().populate_entry_trend(dataframe, metadata)
+        if not metadata["pair"].startswith(self.stage29_pair_prefixes):
+            dataframe.loc[:, ["enter_long", "enter_short"]] = 0
+            dataframe.loc[:, "enter_tag"] = ""
+            return dataframe
+
+        tag = dataframe["enter_tag"].fillna("")
+        allowed = tag.isin(self.stage29_allowed_tags)
+        allowed &= dataframe["stage20_btc_bias"].fillna(0.0) > 0.02
+        allowed &= dataframe["stage20_btc_trend"].fillna(0.0) > -0.05
+        allowed &= dataframe["stage20_btc_risk"].fillna(0.0) > 0.035
+        allowed &= dataframe["stage20_btc_risk"].fillna(1.0) < 0.90
+        allowed &= dataframe["stage20_chop_risk"].fillna(1.0) < 0.68
+        allowed &= dataframe["stage19_overheat_score"].fillna(1.0) < 0.82
+        allowed &= dataframe["stage19_hot_score"].fillna(0.0) > 0.36
+        blocked = ~allowed
+        if blocked.any():
+            dataframe.loc[blocked, ["enter_long", "enter_short"]] = 0
+            dataframe.loc[blocked, "enter_tag"] = ""
+        return dataframe
+
+    def custom_exit(
+        self,
+        pair: str,
+        trade,
+        current_time: datetime,
+        current_rate: float,
+        current_profit: float,
+        **kwargs,
+    ) -> str | bool | None:
+        if trade.enter_tag and trade.enter_tag.startswith("s21_"):
+            return super().custom_exit(
+                pair,
+                trade,
+                current_time,
+                current_rate,
+                current_profit,
+                **kwargs,
+            )
+
+        trade_minutes = (current_time - trade.open_date_utc).total_seconds() / 60
+        if current_profit >= 0.0085:
+            return "stage29_reversion_take_profit"
+        if trade_minutes >= 8 and current_profit >= 0.0028:
+            return "stage29_reversion_time_profit"
+        if trade_minutes >= 2 and current_profit <= -0.0075:
+            return "stage29_reversion_fast_loss"
+        if trade_minutes >= 10 and current_profit <= -0.003:
+            return "stage29_reversion_decay_loss"
+        if trade_minutes >= 18 and current_profit <= 0.001:
+            return "stage29_reversion_flat_timeout"
+        return super().custom_exit(
+            pair,
+            trade,
+            current_time,
+            current_rate,
+            current_profit,
+            **kwargs,
+        )
+
+
+class Intp20Stage30HighWinMomentumScalpStrategy(Intp20Stage21DualHfNewcoinStrategy):
+    """
+    Stage-30: concentrated hotspot leader rotation.
+
+    Trades fewer names than Stage29, but uses a higher-conviction long momentum
+    profile on the strongest live-window leaders. This is the aggressive return
+    leg, not the broad discovery leg.
+    """
+
+    stage30_pair_prefixes = (
+        "EIGEN/",
+        "MERL/",
+        "W/",
+        "PUMP/",
+        "ALT/",
+        "ONDO/",
+    )
+    stoploss = -0.030
+    max_stage21_leverage = 6.8
+
+    def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        dataframe = super().populate_entry_trend(dataframe, metadata)
+        if not metadata["pair"].startswith(self.stage30_pair_prefixes):
+            dataframe.loc[:, ["enter_long", "enter_short"]] = 0
+            dataframe.loc[:, "enter_tag"] = ""
+            return dataframe
+
+        tag = dataframe["enter_tag"].fillna("")
+        allowed = tag.eq("s21_momo_l_h8m_l5")
+        allowed &= dataframe["stage20_btc_bias"].fillna(0.0) > 0.02
+        allowed &= dataframe["stage20_btc_trend"].fillna(0.0) > -0.05
+        allowed &= dataframe["stage20_btc_risk"].fillna(0.0) > 0.035
+        allowed &= dataframe["stage20_btc_risk"].fillna(1.0) < 0.88
+        allowed &= dataframe["stage20_chop_risk"].fillna(1.0) < 0.66
+        allowed &= dataframe["stage19_overheat_score"].fillna(1.0) < 0.80
+        allowed &= dataframe["stage19_hot_score"].fillna(0.0) > 0.38
+        allowed &= dataframe["stage19_volume_ratio"].fillna(0.0) > 0.95
+        allowed &= dataframe["stage20_exhaustion_long"].fillna(1.0) < 0.78
+        blocked = ~allowed
+        if blocked.any():
+            dataframe.loc[blocked, ["enter_long", "enter_short"]] = 0
+            dataframe.loc[blocked, "enter_tag"] = ""
+        return dataframe
+
+    def custom_exit(
+        self,
+        pair: str,
+        trade,
+        current_time: datetime,
+        current_rate: float,
+        current_profit: float,
+        **kwargs,
+    ) -> str | bool | None:
+        trade_minutes = (current_time - trade.open_date_utc).total_seconds() / 60
+        if trade.enter_tag and trade.enter_tag.startswith("s21_"):
+            if current_profit >= 0.012:
+                return "stage30_leader_take_profit"
+            if trade_minutes >= 3 and current_profit >= 0.005:
+                return "stage30_leader_time_profit"
+            if current_profit <= -0.010:
+                return "stage30_leader_fast_loss"
+            if trade_minutes >= 7 and current_profit <= -0.0035:
+                return "stage30_leader_decay_loss"
+            if trade_minutes >= 12:
+                return "stage30_leader_timeout"
+            return None
+        return super().custom_exit(
+            pair,
+            trade,
+            current_time,
+            current_rate,
+            current_profit,
+            **kwargs,
+        )
