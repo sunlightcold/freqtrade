@@ -157,8 +157,19 @@ def main() -> None:
     long_shocks = [0.015, 0.020, 0.025, 0.035] if args.entry_grid else [0.025]
     short_shocks = [0.025, 0.040, 0.060] if args.entry_grid else [0.060]
     volume_floors = [1.5, 2.0, 3.0] if args.entry_grid else [2.0]
-    targets = [0.0015, 0.0020, 0.0030, 0.0040, 0.0050, 0.0075, 0.0100, 0.0150]
-    holds = [15, 30, 60, 120]
+    targets = [
+        0.0015,
+        0.0020,
+        0.0030,
+        0.0040,
+        0.0050,
+        0.0060,
+        0.0075,
+        0.0080,
+        0.0100,
+        0.0150,
+    ]
+    holds = [15, 30, 45, 60, 90, 120]
 
     if args.entry_grid:
         raise SystemExit("Entry-grid mode is disabled until the fixed-entry diagnostic passes.")

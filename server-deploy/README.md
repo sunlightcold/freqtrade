@@ -36,6 +36,52 @@ docker compose up -d
 docker compose ps -a
 ```
 
+## Stage60 单策略模拟盘
+
+Stage60 是当前通过门禁的单策略候选：41 个 Binance USDT 永续币对、1 分钟周期、
+多空交易、1000U 模拟本金、单仓 100U、最多 9 仓。三段独立年度原生回测的组合
+年化分别为 271.82%、118.32%、164.36%，胜率为 83.68%、81.27%、81.28%，
+日均 11.65 至 16.60 单。完整成本、回撤和局限见
+[`STAGE60_BACKTEST_REPORT.md`](STAGE60_BACKTEST_REPORT.md)。这些是历史模拟结果，
+不是未来收益保证；Stage60 目前只允许模拟盘。
+
+服务器仓库路径为 `/data/app/freqtrade` 时，只通过 Git 更新并替换主 Bot。脚本会
+保留 `.env` 中现有的 API 密码和交易所凭证，只启动 `freqtrade` 服务，不创建第二个
+FreqUI：
+
+```bash
+cd /data/app/freqtrade
+git pull --ff-only
+bash server-deploy/apply-stage60-single.sh /data/app/freqtrade
+```
+
+第一次切换策略并希望从 1000U 空白模拟账户开始时，显式重置数据库。旧数据库会先
+备份到 `server-deploy/backups/`：
+
+```bash
+cd /data/app/freqtrade
+git pull --ff-only
+RESET_DB=1 bash server-deploy/apply-stage60-single.sh /data/app/freqtrade
+```
+
+查看唯一 WebUI 的登录账号和脚本自动生成或保留的密码，不需要手工重新输入配置：
+
+```bash
+cd /data/app/freqtrade/server-deploy
+grep -E '^FREQTRADE_API_(USERNAME|PASSWORD)=' .env
+```
+
+部署后快速检查：
+
+```bash
+cd /data/app/freqtrade/server-deploy
+docker compose -p server-deploy ps
+curl -sS http://127.0.0.1:8080/api/v1/ping
+docker compose -p server-deploy logs --since=10m --no-color freqtrade \
+  | grep -Ei 'ERROR|CRITICAL|Traceback|not found|ExchangeNotAvailable' \
+  | tail -40
+```
+
 ## 覆盖当前三路为 Stage28 / Stage29 / Stage30
 
 服务器当前三路模拟盘按下面映射覆盖：

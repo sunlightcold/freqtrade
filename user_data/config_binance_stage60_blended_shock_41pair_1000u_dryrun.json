@@ -1,0 +1,132 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "max_open_trades": 9,
+  "stake_currency": "USDT",
+  "stake_amount": 100,
+  "tradable_balance_ratio": 0.95,
+  "amend_last_stake_amount": true,
+  "last_stake_amount_min_ratio": 0.5,
+  "amount_reserve_percent": 0.05,
+  "fiat_display_currency": "USD",
+  "timeframe": "1m",
+  "strategy": "Intp20Stage60BlendedShockStrategy",
+  "dry_run": true,
+  "dry_run_wallet": 1000,
+  "fee": 0.0007,
+  "trading_mode": "futures",
+  "margin_mode": "isolated",
+  "liquidation_buffer": 0.08,
+  "futures_funding_rate": 0,
+  "cancel_open_orders_on_exit": false,
+  "position_adjustment_enable": false,
+  "max_entry_position_adjustment": 0,
+  "dataformat_ohlcv": "feather",
+  "dataformat_trades": "feather",
+  "unfilledtimeout": {
+    "entry": 1,
+    "exit": 1,
+    "exit_timeout_count": 0,
+    "unit": "minutes"
+  },
+  "entry_pricing": {
+    "price_side": "other",
+    "use_order_book": true,
+    "order_book_top": 1,
+    "price_last_balance": 0.0,
+    "check_depth_of_market": {
+      "enabled": false,
+      "bids_to_ask_delta": 1
+    }
+  },
+  "exit_pricing": {
+    "price_side": "other",
+    "use_order_book": true,
+    "order_book_top": 1
+  },
+  "exchange": {
+    "name": "binance",
+    "key": "",
+    "secret": "",
+    "ccxt_config": {},
+    "ccxt_async_config": {},
+    "pair_whitelist": [
+      "FET/USDT:USDT",
+      "1000BONK/USDT:USDT",
+      "APT/USDT:USDT",
+      "1000FLOKI/USDT:USDT",
+      "NEAR/USDT:USDT",
+      "APE/USDT:USDT",
+      "INJ/USDT:USDT",
+      "CRV/USDT:USDT",
+      "DOGE/USDT:USDT",
+      "DYDX/USDT:USDT",
+      "FIL/USDT:USDT",
+      "ENA/USDT:USDT",
+      "SOL/USDT:USDT",
+      "ETHFI/USDT:USDT",
+      "ETC/USDT:USDT",
+      "JTO/USDT:USDT",
+      "AVAX/USDT:USDT",
+      "JUP/USDT:USDT",
+      "BCH/USDT:USDT",
+      "LDO/USDT:USDT",
+      "LTC/USDT:USDT",
+      "MERL/USDT:USDT",
+      "1000PEPE/USDT:USDT",
+      "NOT/USDT:USDT",
+      "ETH/USDT:USDT",
+      "ONDO/USDT:USDT",
+      "ADA/USDT:USDT",
+      "ORDI/USDT:USDT",
+      "COMP/USDT:USDT",
+      "PENDLE/USDT:USDT",
+      "DOT/USDT:USDT",
+      "PUMP/USDT:USDT",
+      "OP/USDT:USDT",
+      "PYTH/USDT:USDT",
+      "1000SHIB/USDT:USDT",
+      "SEI/USDT:USDT",
+      "XTZ/USDT:USDT",
+      "TAO/USDT:USDT",
+      "HBAR/USDT:USDT",
+      "TIA/USDT:USDT",
+      "WIF/USDT:USDT"
+    ],
+    "pair_blacklist": [
+      ".*DOWN/USDT",
+      ".*UP/USDT",
+      ".*BULL/USDT",
+      ".*BEAR/USDT"
+    ]
+  },
+  "pairlists": [
+    {
+      "method": "StaticPairList"
+    }
+  ],
+  "telegram": {
+    "enabled": false,
+    "token": "",
+    "chat_id": ""
+  },
+  "api_server": {
+    "enabled": true,
+    "listen_ip_address": "0.0.0.0",
+    "listen_port": 8080,
+    "verbosity": "info",
+    "jwt_secret_key": "change-this-local-dev-jwt-secret-key-123456",
+    "ws_token": "change-this-local-dev-websocket-token",
+    "CORS_origins": [
+      "http://127.0.0.1:8081",
+      "http://localhost:8081"
+    ],
+    "username": "freqtrader",
+    "password": "SuperSecurePassword"
+  },
+  "bot_name": "freqtrade-stage60-blended-shock-41pair-1000u-dryrun",
+  "initial_state": "running",
+  "force_entry_enable": false,
+  "internals": {
+    "process_throttle_secs": 5
+  }
+}

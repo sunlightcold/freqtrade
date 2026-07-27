@@ -1,0 +1,29 @@
+{
+  "dry_run_wallet": 1000,
+  "max_open_trades": 9,
+  "stake_amount": 100,
+  "exchange": {
+    "pair_whitelist": [
+      "FET/USDT:USDT",
+      "SOL/USDT:USDT",
+      "DOGE/USDT:USDT",
+      "1000SHIB/USDT:USDT",
+      "AVAX/USDT:USDT",
+      "APT/USDT:USDT",
+      "FIL/USDT:USDT",
+      "INJ/USDT:USDT",
+      "ADA/USDT:USDT",
+      "ETC/USDT:USDT",
+      "SUI/USDT:USDT",
+      "BCH/USDT:USDT",
+      "ETH/USDT:USDT",
+      "LTC/USDT:USDT",
+      "XTZ/USDT:USDT",
+      "ATOM/USDT:USDT",
+      "BNB/USDT:USDT",
+      "ARB/USDT:USDT",
+      "HBAR/USDT:USDT",
+      "RUNE/USDT:USDT"
+    ]
+  }
+}

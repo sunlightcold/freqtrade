@@ -4,6 +4,7 @@ from datetime import datetime
 
 from pandas import DataFrame
 
+from freqtrade.enums import CandleType
 from freqtrade.strategy import IStrategy
 
 
@@ -42,8 +43,8 @@ class Intp20Stage31RelativeShockStrategy(IStrategy):
     short_hold_minutes = 30
     fixed_leverage = 3.0
 
-    def informative_pairs(self) -> list[tuple[str, str]]:
-        return [(self.btc_pair, self.timeframe)]
+    def informative_pairs(self) -> list[tuple[str, str, CandleType]]:
+        return [(self.btc_pair, self.timeframe, CandleType.FUTURES)]
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         dataframe["stage31_volume_ratio"] = dataframe["volume"] / (
