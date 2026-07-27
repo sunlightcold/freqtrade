@@ -283,7 +283,9 @@ def inject_offline_markets(config: dict):
         load_leverage_tiers=False,
     )
     pairs = config["exchange"].get("pair_whitelist") or DEFAULT_PAIRS
-    markets = {pair: build_binance_usdt_futures_market(pair) for pair in pairs}
+    market_pairs = set(pairs)
+    market_pairs.add("BTC/USDT:USDT")
+    markets = {pair: build_binance_usdt_futures_market(pair) for pair in market_pairs}
     exchange._api.set_markets(markets)
     exchange._api_async.set_markets(markets)
     exchange._markets = markets

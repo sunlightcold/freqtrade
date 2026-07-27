@@ -866,3 +866,23 @@ FREQTRADE_EXTRA_CONFIG_ARGS=--config /freqtrade/user_data/config_server_api_over
 sed -i '/^FREQTRADE_EXTRA_CONFIG_ARGS=/d' .env
 docker compose up -d
 ```
+# Stage31 Single-Bot Experimental Deployment
+
+Stage31 replaces the three similar Stage28/29/30 bots with one lightweight
+relative-shock strategy. It uses 20 Binance futures pairs, 1000 USDT dry-run
+capital, 3x leverage, and both long/short entries. The complete validation and
+its failed acceptance gates are documented in `STAGE31_BACKTEST_REPORT.md`.
+
+Deploy only this bot from the sparse server checkout:
+
+```bash
+cd /data/app/freqtrade
+git pull --ff-only
+RESET_DB=1 STOP_LEGACY_BOTS=1 bash server-deploy/apply-stage31-single.sh /data/app/freqtrade
+```
+
+The script detects `http://PUBLIC_IP:8081` for CORS. Set
+`WEBUI_ORIGIN=https://your-ui.example` before the command when using a domain.
+
+This remains dry-run only. It did not reach 80% win rate or 100% return in
+every validation year.
