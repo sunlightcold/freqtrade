@@ -18,6 +18,9 @@ import numpy as np
 import pandas as pd
 
 
+_FIXED_PROFIT_CACHE: dict[tuple[int, str, int, float, float], pd.Series] = {}
+
+
 PAIRS = [
     "SOL",
     "BTC",
@@ -1523,69 +1526,59 @@ def simulate(
     leverage: float,
 ) -> pd.DataFrame:
     entries = np.flatnonzero(signals.fillna(False).to_numpy())
-    rows = []
-    i = 0
-    open_until = -1
     high = dataframe["high"].to_numpy()
     low = dataframe["low"].to_numpy()
     close = dataframe["close"].to_numpy()
     dates = dataframe.index.to_numpy()
+    entries = entries[entries + hold + 1 < len(dataframe)]
+    if not len(entries):
+        return pd.DataFrame(columns=["date", "profit", "exit_reason"])
 
-    while i < len(entries):
-        idx = int(entries[i])
-        if idx <= open_until or idx + 2 >= len(dataframe):
-            i += 1
+    entry_indices = entries + 1
+    entry_prices = close[entry_indices]
+    path_indices = entry_indices[:, None] + np.arange(1, hold + 1)
+    if side == "long":
+        stop_hits = low[path_indices] <= entry_prices[:, None] * (1 - sl)
+        tp_hits = high[path_indices] >= entry_prices[:, None] * (1 + tp)
+    else:
+        stop_hits = high[path_indices] >= entry_prices[:, None] * (1 + sl)
+        tp_hits = low[path_indices] <= entry_prices[:, None] * (1 - tp)
+
+    no_hit = hold + 1
+    first_stop = np.where(stop_hits.any(axis=1), stop_hits.argmax(axis=1) + 1, no_hit)
+    first_tp = np.where(tp_hits.any(axis=1), tp_hits.argmax(axis=1) + 1, no_hit)
+    stop_first = (first_stop <= first_tp) & (first_stop <= hold)
+    tp_first = (first_tp < first_stop) & (first_tp <= hold)
+    exit_offsets = np.where(stop_first, first_stop, np.where(tp_first, first_tp, hold))
+    exit_indices = entry_indices + exit_offsets
+
+    selected = []
+    open_until = -1
+    for index, signal_index in enumerate(entries):
+        if signal_index <= open_until:
             continue
+        selected.append(index)
+        open_until = int(exit_indices[index])
+    selected = np.asarray(selected, dtype=int)
 
-        entry_idx = idx + 1
-        entry = close[entry_idx]
-        end_idx = min(entry_idx + hold, len(dataframe) - 1)
-        exit_idx = end_idx
-        exit_reason = "timeout"
-        window = slice(entry_idx + 1, end_idx + 1)
-
-        if side == "long":
-            stop_hits = np.flatnonzero(low[window] <= entry * (1 - sl))
-            tp_hits = np.flatnonzero(high[window] >= entry * (1 + tp))
-        else:
-            stop_hits = np.flatnonzero(high[window] >= entry * (1 + sl))
-            tp_hits = np.flatnonzero(low[window] <= entry * (1 - tp))
-
-        first_stop = stop_hits[0] if len(stop_hits) else None
-        first_tp = tp_hits[0] if len(tp_hits) else None
-        if first_stop is not None and (first_tp is None or first_stop <= first_tp):
-            exit_idx = entry_idx + 1 + int(first_stop)
-            exit_reason = "stop"
-        elif first_tp is not None:
-            exit_idx = entry_idx + 1 + int(first_tp)
-            exit_reason = "tp"
-
-        if side == "long":
-            profit = close[exit_idx] / entry - 1
-            if exit_reason == "tp":
-                profit = tp
-            elif exit_reason == "stop":
-                profit = -sl
-        else:
-            profit = entry / close[exit_idx] - 1
-            if exit_reason == "tp":
-                profit = tp
-            elif exit_reason == "stop":
-                profit = -sl
-
-        profit = profit * leverage - fee * 2 * leverage
-        profit = max(profit, -0.99)
-        rows.append(
-            {
-                "date": dates[entry_idx],
-                "profit": profit,
-                "exit_reason": exit_reason,
-            }
-        )
-        open_until = exit_idx
-        i += 1
-
-    return pd.DataFrame(rows)
+    selected_entries = entry_prices[selected]
+    selected_exits = close[exit_indices[selected]]
+    if side == "long":
+        profits = selected_exits / selected_entries - 1
+    else:
+        profits = selected_entries / selected_exits - 1
+    selected_stop = stop_first[selected]
+    selected_tp = tp_first[selected]
+    profits = np.where(selected_stop, -sl, np.where(selected_tp, tp, profits))
+    profits = np.maximum(profits * leverage - fee * 2 * leverage, -0.99)
+    reasons = np.where(selected_stop, "stop", np.where(selected_tp, "tp", "timeout"))
+    return pd.DataFrame(
+        {
+            "date": dates[entry_indices[selected]],
+            "profit": profits,
+            "exit_reason": reasons,
+        }
+    )
 
 
 def simulate_fixed_hold(
@@ -1596,14 +1589,17 @@ def simulate_fixed_hold(
     fee: float,
     leverage: float,
 ) -> pd.DataFrame:
-    entry = dataframe["close"].shift(-1)
-    exit_price = dataframe["close"].shift(-(hold + 1))
-    if side == "long":
-        profit = exit_price / entry - 1
-    else:
-        profit = entry / exit_price - 1
-    profit = profit * leverage - fee * 2 * leverage
-    profit = profit.clip(lower=-0.99)
+    cache_key = (id(dataframe), side, hold, fee, leverage)
+    profit = _FIXED_PROFIT_CACHE.get(cache_key)
+    if profit is None:
+        entry = dataframe["close"].shift(-1)
+        exit_price = dataframe["close"].shift(-(hold + 1))
+        if side == "long":
+            profit = exit_price / entry - 1
+        else:
+            profit = entry / exit_price - 1
+        profit = (profit * leverage - fee * 2 * leverage).clip(lower=-0.99)
+        _FIXED_PROFIT_CACHE[cache_key] = profit
     selected = signals.fillna(False) & profit.notna()
     return pd.DataFrame(
         {
@@ -1832,12 +1828,18 @@ def result_to_row(index: int, result: dict, leverage: float) -> dict:
         "p2024": result["slices"]["2024"]["profit"],
         "d2024": result["slices"]["2024"]["daily"],
         "tpd2024": result["slices"]["2024"]["trades_per_day"],
+        "wr2024": result["slices"]["2024"]["winrate"],
+        "pf2024": result["slices"]["2024"]["pf"],
         "p2025": result["slices"]["2025"]["profit"],
         "d2025": result["slices"]["2025"]["daily"],
         "tpd2025": result["slices"]["2025"]["trades_per_day"],
+        "wr2025": result["slices"]["2025"]["winrate"],
+        "pf2025": result["slices"]["2025"]["pf"],
         "p2026": result["slices"]["2026"]["profit"],
         "d2026": result["slices"]["2026"]["daily"],
         "tpd2026": result["slices"]["2026"]["trades_per_day"],
+        "wr2026": result["slices"]["2026"]["winrate"],
+        "pf2026": result["slices"]["2026"]["pf"],
         "robust_score": total["robust_score"],
         "params": format_params(candidate.params),
     }
@@ -1907,7 +1909,21 @@ def main() -> None:
     parser.add_argument("--sls", nargs="+", type=float, default=[0.006, 0.010, 0.016])
     parser.add_argument("--min-signals", type=int, default=10)
     parser.add_argument("--export-csv", default=None)
+    parser.add_argument(
+        "--walk-forward",
+        action="store_true",
+        help="Use three consecutive July-to-July development/validation windows.",
+    )
     args = parser.parse_args()
+
+    if args.walk_forward:
+        SLICES.update(
+            {
+                "2024": ("2023-07-01", "2024-06-30 23:59:59"),
+                "2025": ("2024-07-01", "2025-06-30 23:59:59"),
+                "2026": ("2025-07-01", "2026-06-30 23:59:59"),
+            }
+        )
 
     available_templates = {
         "mean_reversion",

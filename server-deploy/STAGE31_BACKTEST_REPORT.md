@@ -77,14 +77,7 @@ python user_data/scripts/run_offline_futures_backtest.py \
   --export trades
 ```
 
-## Deploy One Bot
+## Deployment
 
-```bash
-cd /data/app/freqtrade
-git pull --ff-only
-RESET_DB=1 STOP_LEGACY_BOTS=1 bash server-deploy/apply-stage31-single.sh /data/app/freqtrade
-```
-
-The script backs up the current database, stops the Stage20/Stage24 projects, keeps the existing WebUI, starts only the main Stage31 bot, and verifies `/api/v1/ping`.
-It detects `http://PUBLIC_IP:8081` as the WebUI CORS origin. For a domain or a
-different port, prefix the command with `WEBUI_ORIGIN=https://your-ui.example`.
+Deployment is blocked. Stage31 failed the current acceptance gates and
+`apply-stage31-single.sh` exits without changing the running environment.
