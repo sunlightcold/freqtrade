@@ -46,14 +46,24 @@ Stage60 是当前通过门禁的单策略候选：41 个 Binance USDT 永续币�
 不是未来收益保证；Stage60 目前只允许模拟盘。
 
 服务器仓库路径为 `/data/app/freqtrade` 时，只通过 Git 更新并替换主 Bot。脚本会
-保留 `.env` 中现有的 API 密码和交易所凭证，只启动 `freqtrade` 服务，不创建第二个
-FreqUI：
+保留 `.env` 中现有的 API 密码和交易所凭证，并确保同一 Compose 项目中只有一个
+FreqUI。Freqtrade API 和 FreqUI 分别绑定 `127.0.0.1:8080`、`127.0.0.1:8081`，
+公网访问必须经过宿主机 Nginx 反向代理：
 
 ```bash
 cd /data/app/freqtrade
 git pull --ff-only
 bash server-deploy/apply-stage60-single.sh /data/app/freqtrade
 ```
+
+宿主机 Nginx 的 `proxy_pass` 指向：
+
+```nginx
+proxy_pass http://127.0.0.1:8081;
+```
+
+修改 Nginx 配置后执行 `nginx -t && systemctl reload nginx`。服务器安全组和防火墙
+不需要放行 `8080` 或 `8081`。
 
 第一次切换策略并希望从 1000U 空白模拟账户开始时，显式重置数据库。旧数据库会先
 备份到 `server-deploy/backups/`：

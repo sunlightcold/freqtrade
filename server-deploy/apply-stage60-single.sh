@@ -59,6 +59,8 @@ set_env FREQTRADE_STRATEGY "${STRATEGY}"
 set_env FREQTRADE_API_BIND "127.0.0.1"
 set_env FREQTRADE_API_PORT "8080"
 set_env FREQTRADE_EXTRA_CONFIG_ARGS ""
+set_env FREQUI_BIND "127.0.0.1"
+set_env FREQUI_PORT "8081"
 ensure_secret FREQTRADE_API_PASSWORD replace-with-a-strong-password 24
 ensure_secret FREQTRADE_API_JWT_SECRET_KEY replace-with-a-long-random-jwt-secret 32
 ensure_secret FREQTRADE_API_WS_TOKEN replace-with-a-long-random-websocket-token 32
@@ -79,12 +81,13 @@ fi
 
 docker compose -p "${PROJECT}" pull freqtrade
 docker compose -p "${PROJECT}" up -d --remove-orphans --no-deps freqtrade
+docker compose -p "${PROJECT}" up -d --no-deps frequi
 
 for _ in $(seq 1 60); do
   if curl -fsS --max-time 3 http://127.0.0.1:8080/api/v1/ping >/dev/null; then
     docker compose -p "${PROJECT}" ps freqtrade
     echo "Stage60 API: pong"
-    echo "Existing FreqUI remains unchanged; no second WebUI was started."
+    echo "Single FreqUI: http://127.0.0.1:8081 (use the host Nginx reverse proxy)"
     exit 0
   fi
   sleep 2

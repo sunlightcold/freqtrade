@@ -153,7 +153,9 @@ def test_stage60_deployment_reuses_the_single_server_deploy_stack():
     assert 'CONFIG="config_binance_stage60_blended_shock_41pair_1000u_dryrun.json"' in script
     assert 'STRATEGY="Intp20Stage60BlendedShockStrategy"' in script
     assert "up -d --remove-orphans --no-deps freqtrade" in script
-    assert "up -d frequi" not in script
+    assert 'set_env FREQUI_BIND "127.0.0.1"' in script
+    assert 'set_env FREQUI_PORT "8081"' in script
+    assert "up -d --no-deps frequi" in script
     assert "server-deploy-stage" not in script
     assert 'RESET_DB="${RESET_DB:-0}"' in script
 
