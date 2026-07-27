@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 FROM python:3.14.5-slim-trixie AS base
 
 # Setup env
@@ -44,7 +46,9 @@ USER ftuser
 # Install and execute
 COPY --chown=ftuser:ftuser . /freqtrade/
 
-RUN pip install -e . --user --no-cache-dir \
+RUN --mount=type=secret,id=github_token \
+  export GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
+  && pip install -e . --user --no-cache-dir \
   && mkdir /freqtrade/user_data/ \
   && freqtrade install-ui
 

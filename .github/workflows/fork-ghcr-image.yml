@@ -64,6 +64,7 @@ jobs:
       - name: Build and push runtime image
         shell: bash
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE: ${{ steps.image.outputs.image }}
           TAG: ${{ steps.image.outputs.tag }}
           SHORT_SHA: ${{ steps.image.outputs.short_sha }}
@@ -72,6 +73,7 @@ jobs:
             --platform linux/amd64 \
             --cache-from type=gha \
             --cache-to type=gha,mode=max \
+            --secret id=github_token,env=GITHUB_TOKEN \
             --tag "${IMAGE}:${TAG}" \
             --tag "${IMAGE}:sha-${SHORT_SHA}" \
             --push \

@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 
 import requests
@@ -8,6 +9,17 @@ logger = logging.getLogger(__name__)
 
 # Timeout for requests
 req_timeout = 30
+
+
+def get_github_api_headers() -> dict[str, str]:
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        return {}
+    return {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
 
 
 def clean_ui_subdir(directory: Path):
@@ -53,9 +65,10 @@ def download_and_install_ui(dest_folder: Path, dl_url: str, version: str):
 
 def get_ui_download_url(version: str | None, prerelease: bool) -> tuple[str, str]:
     base_url = "https://api.github.com/repos/freqtrade/frequi/"
+    headers = get_github_api_headers()
     # Get base UI Repo path
 
-    resp = requests.get(f"{base_url}releases", timeout=req_timeout)
+    resp = requests.get(f"{base_url}releases", headers=headers, timeout=req_timeout)
     resp.raise_for_status()
     r = resp.json()
 
@@ -80,7 +93,7 @@ def get_ui_download_url(version: str | None, prerelease: bool) -> tuple[str, str
     # URL not found - try assets url
     if not dl_url:
         assets = r[0]["assets_url"]
-        resp = requests.get(assets, timeout=req_timeout)
+        resp = requests.get(assets, headers=headers, timeout=req_timeout)
         r = resp.json()
         dl_url = r[0]["browser_download_url"]
 

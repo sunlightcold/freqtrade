@@ -811,7 +811,8 @@ def test_download_and_install_ui(mocker, tmp_path):
     assert read_ui_version(folder) == "22"
 
 
-def test_get_ui_download_url(mocker):
+def test_get_ui_download_url(mocker, monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
     response = MagicMock()
     responses = [
         [
@@ -835,6 +836,10 @@ def test_get_ui_download_url(mocker):
     get_mock = mocker.patch("freqtrade.commands.deploy_ui.requests.get", return_value=response)
     x, last_version = get_ui_download_url(None, False)
     assert get_mock.call_count == 2
+    assert all(
+        call.kwargs["headers"]["Authorization"] == "Bearer test-token"
+        for call in get_mock.call_args_list
+    )
     assert last_version == "0.0.1"
     assert x == "http://download.zip"
 
